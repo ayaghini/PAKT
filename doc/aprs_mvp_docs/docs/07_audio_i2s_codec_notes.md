@@ -12,6 +12,28 @@
 - Simple analog interface (line/mic levels)
 - Low power
 
+## Codec Component Candidates
+
+Based on research, the following components are strong candidates for the project. The primary goal is to find a component that is available on a breakout board for easy prototyping.
+
+### Primary Recommendation: WM8960
+
+*   **Type:** Full stereo codec (ADC + DAC).
+*   **Availability:** Excellent. Widely available on low-cost breakout boards, often marketed for the Raspberry Pi.
+*   **Key Features:**
+    *   **Programmable Gain Amplifier (PGA):** Allows software control over the input gain, which is essential for calibrating the RX level from the SA818.
+    *   **Headphone Driver:** The integrated headphone driver can be used for monitoring or debugging the audio signals directly from the device.
+    *   **Good Support:** Well-documented and supported by various communities.
+
+### Alternative: TLV320AIC3204
+
+*   **Type:** Full stereo codec (ADC + DAC).
+*   **Availability:** Less common on hobbyist breakout boards, more suited for a custom PCB design.
+*   **Key Features:**
+    *   **Very Powerful:** A highly configurable and powerful codec from Texas Instruments.
+    *   **Low Power:** Designed for portable audio applications.
+    *   **Complexity:** Higher complexity in configuration compared to the WM8960, but offers more fine-grained control.
+
 ## Analog front-end considerations
 - SA818 AF output level and impedance need conditioning into codec ADC.
 - SA818 AF input expects appropriate level to achieve correct deviation:
