@@ -3,7 +3,7 @@
 ## Must-have (MVP)
 ### Radio/APRS
 - TX: APRS position beacon (configurable interval)
-- RX: APRS packet decode + forward to phone
+- RX: APRS packet decode and forward to phone
 - TX: APRS message send with basic retry logic
 - Basic framing:
   - AX.25 UI frames
@@ -13,7 +13,7 @@
 ### GPS
 - Parse NMEA, maintain last fix + speed/course + UTC time
 - Expose GPS data to phone over BLE
-- Fail-safe when GPS unavailable (e.g., stale fix indicator)
+- Fail-safe when GPS unavailable (for example stale-fix indicator)
 
 ### BLE
 - Provisioning:
@@ -22,9 +22,13 @@
   - Beacon interval
   - Symbol, comment/status text
 - Data:
-  - RX packets stream
+  - RX packet stream
   - TX request queue + TX status
   - Device telemetry (battery %, temp if available, RSSI proxy if available)
+- Security baseline:
+  - Encrypted connection for all writes
+  - Bonded link required for config/command/TX endpoints
+  - Physical user action required to enter pairing mode
 
 ### Power
 - Li-ion/LiPo battery with USB-C charging
@@ -45,10 +49,10 @@
 - Smart beaconing
 - KISS TNC over BLE so third-party apps can use the device
 - Store-and-forward mailbox mode
-- Firmware update over BLE/Wi‑Fi
+- Firmware update over BLE/Wi-Fi
 - Digipeater / iGate mode (requires more policy + operational considerations)
 
-## Won’t-have (initial)
+## Won't-have (initial)
 - Multi-band
 - DMR/other digital voice
 - High power RF amplifier
