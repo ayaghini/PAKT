@@ -1,0 +1,10 @@
+Item,Notes,Qty
+ESP32-S3 module,Dev choice (module with PSRAM recommended),1
+SA818 VHF module,2m VHF version,1
+GPS module,UART NMEA + good sensitivity,1
+I2S audio codec,Mono ADC/DAC I2S codec (TBD),1
+Battery,Li-ion/LiPo sized to enclosure,1
+Charger IC,USB-C Li-ion charger (TBD),1
+Regulator 3.3V,Low-noise LDO or buck+LDO,1
+Antenna connector,SMA edge or pigtail,1
+Misc passives,filters,ESD,connectors,-
