@@ -1,10 +1,18 @@
-Item,Notes,Qty
-ESP32-S3 module,Dev choice (module with PSRAM recommended),1
-SA818 VHF module,2m VHF version,1
-GPS module,UART NMEA + good sensitivity,1
-I2S audio codec,Mono ADC/DAC I2S codec (TBD),1
-Battery,Li-ion/LiPo sized to enclosure,1
-Charger IC,USB-C Li-ion charger (TBD),1
-Regulator 3.3V,Low-noise LDO or buck+LDO,1
-Antenna connector,SMA edge or pigtail,1
-Misc passives,filters,ESD,connectors,-
+Item,Preferred Part/Class,Status,Key Notes,Qty
+MCU,Based on ESP32-S3 module with PSRAM,Locked,Keep UART debug/programming access,1
+RF module,SA818 VHF variant,Locked,Verify exact module supply and PTT polarity,1
+GPS,U-blox NEO-M8N class module,Locked,UART NMEA with optional PPS footprint,1
+Audio codec,WM8960,Locked-Prototype,Allow alternative codec footprint only if layout budget allows,1
+Fuel gauge,MAX17043,Locked,I2C fuel gauge,1
+Charger,MCP73831 class,Locked-PCB,If USB-C include sink CC resistors and ESD,1
+3.3V regulator,Low-noise regulator sized for total digital load,Provisional,Separate radio rail from digital rail return,1
+Radio rail conditioning,Bulk + HF decoupling near SA818,Required,DNP extra bulk pad recommended,1 set
+Display (optional),SSD1306 0.96in I2C,Optional,Can be depopulated on production compact variant,1
+Antenna connector,SMA female (panel or edge based on mech),Locked,50-ohm controlled route from SA818 ANT,1
+PTT interface,Direct GPIO with optional transistor stage footprint,Required-Option,Keep pull resistor and DNP transistor option,1
+Audio coupling network,AC coupling caps + optional AF gain/filter network,Required,Needed for TX deviation/RX clipping tuning,1 set
+Battery,Single-cell Li-ion/LiPo,Locked,Capacity based on enclosure target,1
+Battery connector,2-pin polarized connector,Locked,Add reverse polarity strategy,1
+Haptic driver,NPN or NMOS low-side driver,Locked,Include base/gate resistor and diode if required by motor type,1
+ESD protection,USB and exposed IO/connector protection,Required,Include at least USB and antenna-adjacent protection strategy,1 set
+Test points,Power + audio + control nets,Required,VBAT_RAW V_SYS_3V3 V_RADIO AF_TX AF_RX PTT UART nets,1 set

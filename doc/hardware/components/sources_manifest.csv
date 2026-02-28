@@ -1,0 +1,16 @@
+component,doc_type,title,url,source_quality
+esp32-s3,datasheet,ESP32-S3 Datasheet,https://www.espressif.com/en/support/documents/technical-documents/datasheets/ESP32-S3-Datasheet.pdf,official
+esp32-s3,reference_manual,ESP32-S3 Technical Reference Manual,https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf,official
+esp32-s3,app_note,ESP32-S3 Hardware Design Guidelines,https://documentation.espressif.com/esp-hardware-design-guidelines/en/latest/esp32s3/index.html,official
+neo-m8n,datasheet,NEO-M8 Data Sheet,https://content.u-blox.com/sites/default/files/NEO-M8-FW3_DataSheet_UBX-15031086.pdf,official
+neo-m8n,app_note,NEO-M8 Hardware Integration Manual,https://content.u-blox.com/sites/default/files/NEO-M8_HardwareIntegrationManual_%28UBX-13003557%29.pdf,official
+neo-m8n,app_note,u-blox 8/M8 Receiver Description Protocol Spec,https://content.u-blox.com/sites/default/files/u-blox8-M8_ReceiverDescrProtSpec_%28UBX-13003221%29.pdf,official
+max17043,datasheet,MAX17043/MAX17044 Data Sheet,https://www.analog.com/media/en/technical-documentation/data-sheets/MAX17043-MAX17044.pdf,official
+max17043,app_note,Characterizing a Battery for Use with a Fuel Gauge,https://www.analog.com/en/resources/technical-articles/battery-gauge--maxim-integrated.html,official
+mcp73831,datasheet,MCP73831 Product Page,https://www.microchip.com/en-us/product/MCP73831,official
+mcp73831,app_note,AN1149 Single-Cell Li-Ion Charger Design,https://www.microchip.com/en-us/application-notes/an1149,official
+mcp73831,app_note,AN947 Li-Ion/Li-Poly Charging,https://www.microchip.com/en-us/application-notes/an947,official
+sa818,datasheet,SA818 Download Center,https://www.nicerf.com/driver?m=driver&f=driver&driver_id=88,official
+sa818,app_note,NiceRF Download Center,https://www.nicerf.com/download/,official
+wm8960,datasheet,WM8960 Datasheet Mirror,https://www.alldatasheet.com/datasheet-pdf/pdf/628821/WOLFSON/WM8960.html,mirror
+wm8960,app_note,WAN0129 Layout Design Considerations,https://statics.cirrus.com/pubs/appNote/WAN0129.pdf,official
