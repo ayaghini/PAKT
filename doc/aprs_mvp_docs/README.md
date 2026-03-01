@@ -24,6 +24,7 @@ A pocket device that:
 - `docs/08_test_plan.md`
 - `docs/09_risks_and_mitigations.md`
 - `docs/10_open_questions.md`
+- `docs/11_hf_ble_feasibility_study.md`
 - `hardware/placeholder_bom.csv`
 - `hardware/interfaces.md`
 
@@ -41,4 +42,6 @@ A pocket device that:
    - show RX packets + map
    - send a message
 5. Implement TX beacon + RX decode loop, then message ACK/retry.
+
+
 
