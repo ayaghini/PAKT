@@ -39,39 +39,45 @@ Evidence legend: `code + tests + gate summary + residual risks`
 
 ## Step 5 - Desktop BLE test app baseline
 - IDs: APP-000
-- Status: todo
+- Status: in_progress
 - Exit: desktop app can connect/pair/reconnect, exercise core GATT paths, and export debug logs
-- Evidence: desktop session logs for config, RX stream, TX result, telemetry, reconnect
+- Evidence (software done): app/desktop_test/: chunker.py (client-side BleChunker mirror with split + Reassembler), pakt_client.py (bleak async GATT client with transparent chunked writes and notify reassembly), main.py (interactive CLI: scan, connect, DIS read, config read/write, command, TX request, 30 s notify listen, timestamped log export). test_chunker.py (25 pytest tests). CI app-tests job added.
+- Residual risk: full GATT validation (pair, write-rejection when unbonded, RX stream, TX result, telemetry, reconnect matrix) blocked until prototype hardware is available.
 
 ## Step 6 - App connectivity and config
 - IDs: APP-001, APP-002, APP-003, APP-008
-- Status: todo
+- Status: in_progress
 - Exit: stable pair/connect/reconnect + config R/W
-- Evidence: reconnect matrix summary, config persistence checks
+- Evidence (software done): app/desktop_test/: transport.py (BleTransport FSM: IDLE/SCANNING/CONNECTING/CONNECTED/RECONNECTING/ERROR, bounded reconnect: 3 attempts x 1 s, per architecture contract G, on_reconnected callback re-subscribes GATT notify), config_store.py (local JSON cache with save/load/validate/diff), pakt_client.py refactored to use BleTransport + ConfigStore (auto-cache on read, auth-error classification via is_auth_error()), main.py updated with state display, config diff preview, offline config view, and pairing guidance on auth errors. test_app.py: 45 pytest tests covering ConfigStore, BleTransport FSM, reconnect callbacks, and is_auth_error().
+- Residual risk: reconnect matrix and config persistence checks against real hardware blocked until prototype available.
 
 ## Step 7 - Messaging end-to-end
 - IDs: FW-010, APP-006
-- Status: todo
+- Status: in_progress
 - Exit: send->pending->ack/timeout flow works reliably
-- Evidence: message trace samples for ack and timeout paths
+- Evidence (software done): TxMessage + TxScheduler (components/aprs_fsm/): static 8-slot queue, 5-retry policy at 20 s intervals, enqueue/tick/on_ack_received/cancel API, result callback fires on ACKED/TIMED_OUT/CANCELLED. 26 host unit tests in test_host/test_tx_scheduler.cpp. Python MessageTracker (app/desktop_test/message_tracker.py): MsgState FSM, on_sent/on_tx_result/cancel/pending/recent/clear_resolved API; 37 pytest tests in test_messaging.py. pakt_client.py routes tx_result notify into MessageTracker; main.py adds [9] message queue view. CI app-tests updated to include test_messaging.py.
+- Residual risk: full send→ack/timeout flow requires hardware (firmware TxScheduler wired into APRS task, radio TX, and ack detection). BLE TX result notify format must be confirmed against firmware implementation when hardware is available.
 
 ## Step 8 - Telemetry and operator UX
 - IDs: APP-004, APP-005, FW-015
-- Status: todo
+- Status: in_progress
 - Exit: status + RX stream + diagnostics visible and exportable
-- Evidence: telemetry payload examples, export artifact sample
+- Evidence (software done): Telemetry component (components/telemetry/): DeviceStatus, GpsTelem, PowerTelem, SysTelem structs + compact JSON serialisers (to_json, ≤ 240 B/frame). 18 host unit tests in test_host/test_telemetry.cpp. Python telemetry.py: typed parsers + summary formatters for all 4 channels, parse_notify dispatcher. diagnostics.py: DiagnosticsStore — 300-sample ring per channel, running stats (min/max/avg), export_dict/export_json. 40 pytest tests in test_telemetry_app.py. pakt_client.py routes telemetry notifies into DiagnosticsStore; rx_packet frames into add_rx_frame. main.py adds [T] telemetry snapshot and [X] export diagnostics report. CI app-tests updated.
+- Residual risk: live telemetry stream, GPS fix, power readings, and system stats require prototype hardware. RX frame delivery via rx_packet notify requires APRS decode pipeline wired in firmware.
 
 ## Step 9 - MVP validation gates
 - IDs: QA-003, QA-004, QA-006, DOC-001, DOC-003
-- Status: todo
+- Status: in_progress
 - Exit: all MVP gates pass (see `qa_gates.md`)
-- Evidence: gate-by-gate pass matrix with unresolved risks list
+- Evidence (software done): gate_pass_matrix.md — full G0–G4 assessment with pass/partial/blocked per check item and 8-item residual risk table with mitigation owners. CI regression suite (QA-006) operational: firmware-build + host-tests + app-tests on every push/PR. DOC-001: docs/13_quickstart_guide.md — 9-step first-use guide covering installation, pairing, config, TX, telemetry, and log export. DOC-003: docs/14_pairing_security_policy.md — LE SC security model, AUTH_ERR resolution procedure, bond-reset flow, multi-client notes, regulatory notes. QA-003 (RF functional test) and QA-004 (BLE endurance matrix) blocked until hardware available.
+- Residual risk: G1 (functional), G3 hardware portion (bonded-write rejection, PTT safe-off), and G4 blocked pending EVT prototype. PTT safe-off under fault (G3) is a P0 blocker for any TX-capable field use.
 
 ## Step 10 - Post-MVP interop
 - IDs: INT-001, INT-003, DOC-004
-- Status: todo
+- Status: in_progress
 - Exit: capability negotiation + draft KISS-over-BLE interop
-- Evidence: negotiation behavior summary, compatibility notes
+- Evidence (software done): DeviceCapabilities component (components/capability/): feature bitmask, JSON serialiser, mvp_defaults(), has() API; 16 host unit tests in test_capability.cpp. kDeviceCapabilities UUID (0xA0040000) added to BleUuids.h. Python capability.py: DeviceCapabilities parser (protocol, fw_ver, hw_rev, features frozenset), CapabilityNegotiator (read on connect, assumed_mvp() fallback, feature flag API, on_caps callback with CAPS_WARN for missing MVP features, reset on disconnect); 28 pytest tests in test_capability.py. pakt_client.py reads capabilities on connect, exposes capabilities property, logs CAPS/CAPS_WARN. CI app-tests updated. INT-003 draft spec: docs/16_kiss_over_ble_spec.md — KISS Service UUIDs, chunked frame transport, TX/RX paths, multi-client arbitration, capability flag, open questions. DOC-004: docs/15_interoperability_matrix.md — platform matrix for Windows/macOS/Linux/Android/iOS, KISS bridge compat table, frequency configs, known limitations, hardware validation checklist.
+- Residual risk: Device Capabilities characteristic not yet wired into BleServer (requires hardware bring-up); CapabilityNegotiator falls back to assumed_mvp() until then. KISS profile deferred to M3.
 
 ## Step 11 - HF discovery track
 - IDs: HF-001..HF-011
@@ -79,3 +85,4 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Exit: go/no-go decision record for production HF audio bridge
 - Evidence: latency/jitter/battery measurements and explicit decision rationale
 - Note: This is a discovery track that can run alongside Steps 9-10 if a second agent is available, but must not block MVP milestone closure. A single agent should complete Steps 0-10 before starting Step 11.
+

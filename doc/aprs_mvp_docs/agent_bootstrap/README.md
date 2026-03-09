@@ -11,7 +11,7 @@ Load order (strict):
 6. `handoff_prompt_template.md` (only when handing to another agent)
 7. `device_loop.md` (required when hardware is connected)
 
-Files 1–5 are always required. File 6 is handoff-only. File 7 is hardware-only.
+Files 1-5 are always required. File 6 is handoff-only. File 7 is hardware-only.
 
 Per-step reference docs (consult `step_source_map.md` to know which to open for each step):
 - `../docs/02_mvp_scope.md`
@@ -33,7 +33,7 @@ Rules:
 - A repeatable loop for "implement -> test -> evidence -> handoff".
 
 ## Agent operating model
-1. Load files 1–5 above in order (plus 6 or 7 if applicable).
+1. Load files 1-5 above in order (plus 6 or 7 if applicable).
 2. Execute exactly one `todo` step from `implementation_steps_mvp.md`.
 3. Keep changes scoped to that step and its direct dependencies.
 4. Run applicable QA gates and collect evidence.
@@ -56,3 +56,4 @@ Escalate (do not guess) when:
 - SA818 electrical behavior differs from assumptions.
 - BLE security requirements conflict with compatibility.
 - Gate failures are intermittent and not reproducible.
+

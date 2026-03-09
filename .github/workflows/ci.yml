@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # ── Firmware build (ESP32-S3 via ESP-IDF) ──────────────────────────────────
+  # Firmware build (ESP32-S3 via ESP-IDF)
   firmware-build:
     name: Firmware Build (ESP32-S3)
     runs-on: ubuntu-latest
@@ -21,7 +21,7 @@ jobs:
           path: firmware
           command: idf.py build
 
-  # ── Host unit tests (pure-software, no hardware required) ──────────────────
+  # Host unit tests (pure-software, no hardware required)
   host-tests:
     name: Host Unit Tests
     runs-on: ubuntu-latest
@@ -39,3 +39,21 @@ jobs:
 
       - name: Run tests
         run: ./build/test_host/pakt_tests --reporters=console --no-intro
+
+  # Desktop app unit tests (Python chunker, no BLE hardware required)
+  app-tests:
+    name: Desktop App Tests (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install pytest
+        # bleak is intentionally not installed: tests only import chunker.py,
+        # config_store.py, and transport.py, which mock all bleak calls.
+        # ubuntu-latest ships Python 3.x; no setup-python step needed.
+
+      - name: Run app tests
+        working-directory: app/desktop_test
+        run: pytest test_chunker.py test_app.py test_messaging.py test_telemetry_app.py test_capability.py -v --tb=short
+

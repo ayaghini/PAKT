@@ -39,6 +39,12 @@ set(MODEM_SRC        "${COMP}/modem/AfskModulator.cpp"
                      "${COMP}/modem/AfskDemodulator.cpp")
 set(BLE_INCLUDE      "${COMP}/ble_services/include")
 set(BLE_SRC          "${COMP}/ble_services/BleChunker.cpp")
+set(FSM_INCLUDE      "${COMP}/aprs_fsm/include")
+set(FSM_SRC          "${COMP}/aprs_fsm/TxScheduler.cpp")
+set(TELEM_INCLUDE    "${COMP}/telemetry/include")
+set(TELEM_SRC        "${COMP}/telemetry/Telemetry.cpp")
+set(CAP_INCLUDE      "${COMP}/capability/include")
+set(CAP_SRC          "${COMP}/capability/DeviceCapabilities.cpp")
 
 # ── Test executable ───────────────────────────────────────────────────────────
 add_executable(pakt_tests
@@ -48,11 +54,17 @@ add_executable(pakt_tests
     test_aprs.cpp
     test_afsk_modem.cpp
     test_ble_chunker.cpp
+    test_tx_scheduler.cpp
+    test_telemetry.cpp
+    test_capability.cpp
     # Component sources compiled directly (no ESP-IDF build system needed)
     ${AX25_SRC}
     ${APRS_SRC}
     ${MODEM_SRC}
     ${BLE_SRC}
+    ${FSM_SRC}
+    ${TELEM_SRC}
+    ${CAP_SRC}
 )
 
 target_include_directories(pakt_tests PRIVATE
@@ -62,6 +74,9 @@ target_include_directories(pakt_tests PRIVATE
     ${APRS_INCLUDE}
     ${MODEM_INCLUDE}
     ${BLE_INCLUDE}
+    ${FSM_INCLUDE}
+    ${TELEM_INCLUDE}
+    ${CAP_INCLUDE}
     ${doctest_SOURCE_DIR}/doctest      # provides <doctest/doctest.h>
 )
 
