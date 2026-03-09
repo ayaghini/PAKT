@@ -22,3 +22,14 @@ A pocket APRS tracker + message TNC for 2m that pairs to a phone over BLE, elimi
 - Digipeater / iGate (optional later)
 - Full KISS TNC compatibility (can be added later)
 - High-power RF stages (keep within SA818 characteristics in MVP)
+
+> ### Feedback
+>
+> This is a strong, focused product brief that clearly defines the project's vision. The value proposition is compelling and addresses common pain points for APRS users.
+>
+> A few thoughts:
+>
+> *   **Target User:** Consider explicitly adding **SOTA/POTA/hiker hams** to your target user list. The small, battery-powered, cable-free nature of this device is a perfect fit for portable operators who value lightweight and simple setups.
+> *   **Core Value:** The "no audio cables, no VOX hacks" is a significant selling point. It's the primary differentiator from many existing solutions and is worth highlighting in any user-facing material.
+> *   **Configuration Constraint:** The requirement for configurable regional frequencies is important. It would be beneficial to start thinking about *how* this configuration will be managed (e.g., via the BLE app, a physical switch, a config file on the device). This will have implications for both the firmware and mobile app architecture.
+> *   **KISS TNC Non-Goal:** Deferring full KISS compatibility is a smart move for an MVP. A potential future enhancement could be a "simple" KISS mode that allows other apps (like APRSdroid) to use the device as a simple packet modem, broadening its compatibility.

@@ -7,7 +7,8 @@ ESP32-S3 FreeRTOS tasks suggested:
    - PTT control
    - TX scheduling
 2. `audio_task`
-   - I2S read/write (codec)
+   - I2S read/write (SGTL5000 codec)
+   - SGTL5000 clock and route init (including `SYS_MCLK` expectations)
    - AFSK demod/encode pipeline
 3. `aprs_task`
    - AX.25 encode/decode
@@ -37,5 +38,6 @@ ESP32-S3 FreeRTOS tasks suggested:
 
 ## Timing
 - Use precise sample rate (e.g., 8 kHz) for AFSK modem.
+- Ensure SGTL5000 `SYS_MCLK` ratio is valid for selected sample rate.
 - Ensure TX preamble flags and bit-stuffing per AX.25.
 - Rate-limit BLE notifications to avoid starving modem.

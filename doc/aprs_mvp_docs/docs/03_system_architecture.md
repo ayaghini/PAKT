@@ -6,7 +6,8 @@
    - Antenna, matching, filtering, shielding
 
 2. Audio modem subsystem
-   - I2S audio codec (ADC/DAC)
+   - SGTL5000 I2S audio codec (ADC/DAC, mono path in firmware)
+   - Explicit `SYS_MCLK` from ESP32-S3 I2S clock output
    - Analog interface to SA818 AF in/out
    - DSP / modem running on ESP32-S3:
      - 1200 baud AFSK demod (Bell 202)
@@ -18,15 +19,15 @@
 
 4. Connectivity subsystem
    - BLE GATT services
-   - Optional Wi‑Fi (later) for updates / gateway
+   - Optional Wi-Fi (later) for updates / gateway
 
 5. Power subsystem
-   - Li‑ion/LiPo charger
-   - Battery gauge / ADC measurement
+   - MCP73831/2 Li-ion/LiPo charger
+   - MAX17048 battery gauge on I2C
    - Regulators (3.3V digital, SA818 supply as required)
    - Power switching (RF off in sleep)
 
 ## Data flow
-- GPS → ESP32 → APRS encoder → Audio DAC → SA818 → RF
-- RF → SA818 audio → Codec ADC → ESP32 demod → packet stream → BLE → Phone
-- Phone → BLE → ESP32 → APRS message encoder → TX
+- GPS -> ESP32 -> APRS encoder -> Audio DAC -> SA818 -> RF
+- RF -> SA818 audio -> Codec ADC -> ESP32 demod -> packet stream -> BLE -> Phone
+- Phone -> BLE -> ESP32 -> APRS message encoder -> TX

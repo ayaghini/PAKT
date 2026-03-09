@@ -1,0 +1,91 @@
+project:
+  name: PAKT
+  objective: "Battery-powered APRS pocket TNC/tracker with BLE phone app; later HF-capable unified app architecture"
+  phase: "Design->Implementation"
+  current_focus: "MVP APRS path (2m, SA818 + SGTL5000 + BLE)"
+
+mvp:
+  radio:
+    - "TX APRS position beacon"
+    - "RX APRS decode to phone"
+    - "TX APRS message with retry/ack"
+  gps:
+    - "NMEA parse + stale-fix handling"
+  ble:
+    - "Config, command, status, RX stream, TX request/result"
+    - "Encrypted + bonded writes"
+  power:
+    - "Li-ion charging + battery telemetry + low power mode"
+
+core_components:
+  mcu: "ESP32-S3"
+  rf: "SA818"
+  codec: "SGTL5000 (primary candidate)"
+  codec_alternatives:
+    - "TLV320AIC3204"
+    - "TLV320AIC3101/TLV320AIC3104"
+    - "ADAU1761"
+  gps: "NEO-M8N"
+  battery_charger: "MCP73831/2"
+  battery_gauge: "MAX17048"
+
+system_defaults:
+  aprs:
+    modem: "Bell 202 AFSK 1200 baud"
+    mark_hz: 1200
+    space_hz: 2200
+    framing: "AX.25 UI"
+  audio:
+    sample_rate_priority_hz:
+      - 8000
+      - 16000
+    i2s_mode: "ESP32-S3 master"
+    clock_rule: "SGTL5000 SYS_MCLK must be valid before enabling pipeline"
+  ble:
+    custom_base_uuid: "544E4332-8A48-4328-9844-3F5C00000000"
+    write_security: "Encrypted + bonded required for config/command/TX writes"
+    mtu_rule: "Must work at default MTU; chunk above (mtu-3)"
+  telemetry:
+    battery_source: "MAX17048"
+    charger_source: "MCP73831/2 STAT + charge-path state"
+
+regional_defaults:
+  aprs_frequency_hz:
+    na: 144390000
+    eu: 144800000
+  policy: "Do not assume a global default region; require explicit user selection."
+
+hard_constraints:
+  - "1200 baud Bell 202 AFSK"
+  - "AX.25 UI framing"
+  - "BLE-first mobile UX"
+  - "Regional APRS frequency presets"
+
+top_risks:
+  - "Audio level/deviation calibration"
+  - "RF desense from digital noise"
+  - "iOS background BLE behavior"
+  - "HF BLE audio bridge latency/jitter (post-MVP risk)"
+
+definition_of_done_mvp:
+  - "Controlled-condition beacon decode target met"
+  - "1h BLE continuous RX stable"
+  - "Message send/ack/timeout visible and reliable"
+  - "Bonded+encrypted write protection enforced"
+
+acceptance_thresholds:
+  beacon_decode_rate_min_pct: 95
+  ble_continuous_rx_min_minutes: 60
+  ptt_fail_safe: "Any fault path returns PTT to off"
+
+implementation_policy:
+  scope_unit: "One step at a time from implementation_steps_mvp.md"
+  test_policy: "Touched behavior requires tests in same change"
+  compatibility: "Ignore unknown fields; version protocol changes"
+
+do_not_assume:
+  - "HF BLE audio streaming is production-ready"
+  - "All radios share CAT/PTT wiring"
+  - "Default APRS region is globally valid"
+  - "BLE MTU upgrade is always available"
+  - "Battery telemetry can be inferred without gauge integration"

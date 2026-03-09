@@ -3,10 +3,11 @@
 This document defines a wiring baseline that can be transferred into schematic capture and first-pass PCB layout.
 
 ## Scope and assumptions
-- Target architecture: ESP32-S3 + SA818 + WM8960 + NEO-M8N + MAX17043.
+- Target architecture: ESP32-S3 + SA818 + SGTL5000 + NEO-M8N + MAX17048.
 - Logic domain is 3.3V unless a module explicitly requires otherwise.
 - SA818 supply must be validated against the exact module datasheet before PCB release.
 - Final design must pass bench validation items in Section 10 before fabrication release.
+- Prototype strategy: use Adafruit Feather ESP32-S3 onboard charger + battery monitor behavior as the wiring baseline for custom PCB migration.
 
 ## 1. Power Tree
 
@@ -33,29 +34,33 @@ This document defines a wiring baseline that can be transferred into schematic c
 
 ## 2. Digital Interfaces
 
-### I2C shared bus
-| ESP32-S3 Pin | Net        | Device Pins                           |
-|--------------|------------|----------------------------------------|
-| GPIO8        | I2C_SDA    | WM8960 SDA, MAX17043 SDA, SSD1306 SDA |
-| GPIO9        | I2C_SCL    | WM8960 SCL, MAX17043 SCL, SSD1306 SCL |
+### I2C shared bus (Control)
+| ESP32-S3 Pin | Net        | Device Pins                              |
+|--------------|------------|-------------------------------------------|
+| GPIO8        | I2C_SDA    | SGTL5000 SDA, MAX17048 SDA, SSD1306 SDA  |
+| GPIO9        | I2C_SCL    | SGTL5000 SCL, MAX17048 SCL, SSD1306 SCL  |
 
 I2C requirements:
+- Used for configuration and control of I2C peripherals.
 - One pull-up set only per bus (typically 2.2k to 4.7k to 3.3V).
 - Confirm no duplicate strong pull-ups on all breakouts in prototype.
 - Keep bus short and route away from antenna feed and SA818 RF section.
 
-### I2S bus (ESP32 master)
-| ESP32-S3 Pin | Net      | WM8960 Pin |
-|--------------|----------|------------|
-| GPIO5        | I2S_BCLK | BCLK       |
-| GPIO6        | I2S_WS   | LRC/WS     |
-| GPIO7        | I2S_DOUT | DIN        |
-| GPIO10       | I2S_DIN  | DOUT       |
+### I2S bus (ESP32 master, Audio Data)
+| ESP32-S3 Pin | Net       | SGTL5000 Pin |
+|--------------|-----------|--------------|
+| GPIO5        | I2S_BCLK  | SCLK         |
+| GPIO6        | I2S_WS    | LRCLK        |
+| GPIO7        | I2S_DOUT  | DIN          |
+| GPIO10       | I2S_DIN   | DOUT         |
+| GPIO4        | I2S_MCLK  | SYS_MCLK     |
 
 I2S requirements:
+- Used for digital audio data transfer between ESP32 and SGTL5000.
 - Keep traces short and length-matched where practical.
 - Route over continuous ground reference.
 - Avoid running parallel to RF or high-current TX supply routes.
+- SGTL5000 clocking requires valid `SYS_MCLK`; verify selected ESP32 I2S/MCLK GPIO in firmware and schematic.
 
 ### UART links
 | Interface | ESP32-S3 Pin | Net           | Remote Pin |
@@ -79,12 +84,12 @@ Optional but recommended:
 | GPIO41       | BTN_FUNC_N    | Function button to GND | Use internal or external pull-up; add debounce in firmware. |
 | GPIO42       | HAPTIC_DRV    | NPN/MOSFET gate/base   | Use transistor driver + flyback diode if motor type requires it. |
 
-## 4. Analog Audio Interface (WM8960 <-> SA818)
+## 4. Analog Audio Interface (SGTL5000 <-> SA818)
 
-| Source         | Destination | Net            | Required conditioning |
-|----------------|-------------|----------------|-----------------------|
-| WM8960 DAC out | SA818 AF_IN | AF_TX_COUPLED  | AC coupling capacitor + optional trim attenuation network footprint. |
-| SA818 AF_OUT   | WM8960 ADC  | AF_RX_COUPLED  | AC coupling capacitor + optional RC low-pass footprint. |
+| Source          | Destination | Net            | Required conditioning |
+|-----------------|-------------|----------------|-----------------------|
+| SGTL5000 DAC out| SA818 AF_IN | AF_TX_COUPLED  | AC coupling capacitor + optional trim attenuation network footprint. |
+| SA818 AF_OUT    | SGTL5000 ADC| AF_RX_COUPLED  | AC coupling capacitor + optional RC low-pass footprint. |
 
 Analog design rules:
 - Keep AF paths short, away from antenna and switching regulators.
@@ -101,7 +106,8 @@ Analog design rules:
 
 ## 6. Battery and Charging
 
-- Prefer MCP73831-class charger for final PCB.
+- Prefer MCP73831/2 Li-ion charger to match Adafruit Feather ESP32-S3 behavior.
+- Use MAX17048 as fuel gauge baseline for prototype parity.
 - If using USB-C receptacle, include CC resistors for sink configuration.
 - Add battery connector reverse-polarity protection strategy.
 - Provide charger status output to LED or MCU GPIO if available.
@@ -131,7 +137,7 @@ Core named nets to preserve in schematic:
 - Radio control: `SA818_PTT`, `SA818_RX_CTRL`, `SA818_TX_STAT`.
 - GPS: `GPS_TX_NMEA`, `GPS_RX_CTRL`, optional `GPS_PPS`.
 - I2C: `I2C_SDA`, `I2C_SCL`.
-- I2S: `I2S_BCLK`, `I2S_WS`, `I2S_DOUT`, `I2S_DIN`.
+- I2S: `I2S_BCLK`, `I2S_WS`, `I2S_DOUT`, `I2S_DIN`, `I2S_MCLK`.
 - UI: `LED_STATUS_G`, `LED_RX_B`, `LED_TX_R`, `BTN_FUNC_N`, `HAPTIC_DRV`.
 
 ## 10. Pre-PCB Validation Checklist
@@ -145,3 +151,4 @@ Before committing to PCB rev A:
 6. Verify GPS lock and UART stability while TX/RX active.
 7. Verify I2C bus rise time with all attached peripherals.
 8. Verify BLE operation while RX audio pipeline is active.
+9. Verify SGTL5000 `SYS_MCLK` frequency/ratio configuration is stable at selected sample rate.
