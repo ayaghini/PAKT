@@ -3,7 +3,7 @@
 ## Must-have (MVP)
 ### Radio/APRS
 - TX: APRS position beacon (configurable interval)
-- RX: APRS packet decode and forward to phone
+- RX: APRS packet decode and forward to BLE clients (desktop test app and phone app)
 - TX: APRS message send with basic retry logic
 - Basic framing:
   - AX.25 UI frames
@@ -12,7 +12,7 @@
 
 ### GPS
 - Parse NMEA, maintain last fix + speed/course + UTC time
-- Expose GPS data to phone over BLE
+- Expose GPS data to BLE clients (desktop test app and phone app)
 - Fail-safe when GPS unavailable (for example stale-fix indicator)
 
 ### BLE
@@ -35,15 +35,20 @@
 - Battery voltage/percentage measurement via MAX17048 fuel gauge
 - Low power mode when idle
 
-### UX (phone app)
+### UX (clients)
+Desktop test app (pre-phone, required for MVP bring-up):
+- Connect/disconnect to device over BLE
+- Read/write config JSON
+- Trigger commands (`beacon_now`, controlled `radio_set`)
+- Show RX packet stream, status, and telemetry
+- Send TX request and show TX result/timeout
+- Export session logs for bench debugging
+
+Phone app (MVP user UX):
 - Connect/disconnect to device
 - Configuration screen (callsign, interval, symbol/comment)
-- Map view with:
-  - current device position
-  - decoded stations list
-- Messaging view:
-  - send message to callsign
-  - show ack/timeouts
+- Map view (current device position + decoded stations list)
+- Messaging view (send message + show ack/timeouts)
 
 ## Should-have (post-MVP)
 - Smart beaconing

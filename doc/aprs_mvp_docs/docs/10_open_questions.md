@@ -11,3 +11,6 @@
 7. Pairing UX details: dedicated pair button, pairing window timeout, and bond reset flow.
 8. MAX17048 integration details:
    - alert pin usage vs polling-only fuel gauge reads in MVP firmware
+9. Windows desktop app decisions:
+   - desktop framework choice for BLE client (for example .NET/WinUI)
+   - minimum test UI scope before phone app feature work continues

@@ -263,7 +263,13 @@ This backlog is the execution plan for delivering:
 - Dependencies: FW-013
 - Done criteria: update package format and trust chain documented and prototyped.
 
-## 7. Mobile App Stream (Unified App)
+## 7. Client App Stream (Desktop + Mobile)
+
+### APP-000 Windows desktop BLE test harness
+- Priority: `P0`
+- Estimate: `M`
+- Dependencies: FW-011
+- Done criteria: desktop app can scan/pair/connect, read/write config, issue test commands, display status/RX/TX/telemetry, and export session logs.
 
 ### APP-001 App architecture baseline
 - Priority: `P0`
@@ -274,7 +280,7 @@ This backlog is the execution plan for delivering:
 ### APP-002 BLE transport client
 - Priority: `P0`
 - Estimate: `L`
-- Dependencies: APP-001, FW-011
+- Dependencies: APP-000, APP-001, FW-011
 - Done criteria: scan, pair, connect, MTU negotiation, reconnect flows implemented on Android and iOS.
 
 ### APP-003 Device configuration screen
@@ -392,8 +398,8 @@ This backlog is the execution plan for delivering:
 ### QA-004 BLE endurance and reconnect matrix
 - Priority: `P0`
 - Estimate: `M`
-- Dependencies: APP-002, FW-011
-- Done criteria: 1-hour continuous RX and reconnect scenarios pass on iOS and Android test matrix.
+- Dependencies: APP-000, APP-002, FW-011
+- Done criteria: 1-hour continuous RX and reconnect scenarios pass on desktop harness and iOS/Android matrix.
 
 ### QA-005 Field test protocol
 - Priority: `P1`
@@ -557,7 +563,7 @@ This backlog is the execution plan for delivering:
 ### Sprint B (Core data paths)
 - HW-005, HW-006, HW-007
 - FW-004, FW-005, FW-011, FW-013
-- APP-002, APP-003, APP-004
+- APP-000, APP-002, APP-003, APP-004
 - INT-002
 - QA-002
 
@@ -587,6 +593,7 @@ This backlog is the execution plan for delivering:
 4. OTA/signing and deeper security hardening (FW-018, SEC-003)
 
 ## 16. Open Planning Decisions
+- Select Windows desktop app stack for BLE test harness (for example .NET/WinUI or Electron/WebBluetooth fallback).
 - Select primary mobile stack and define ownership boundaries between firmware and app teams.
 - Confirm exact target phone OS versions for support matrix.
 - Confirm first three HF radios for profile certification.

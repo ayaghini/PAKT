@@ -19,6 +19,8 @@
 
 4. Connectivity subsystem
    - BLE GATT services
+   - Windows desktop BLE test client (development and bench validation)
+   - Phone BLE client (user-facing workflow)
    - Optional Wi-Fi (later) for updates / gateway
 
 5. Power subsystem
@@ -30,4 +32,6 @@
 ## Data flow
 - GPS -> ESP32 -> APRS encoder -> Audio DAC -> SA818 -> RF
 - RF -> SA818 audio -> Codec ADC -> ESP32 demod -> packet stream -> BLE -> Phone
+- RF -> SA818 audio -> Codec ADC -> ESP32 demod -> packet stream -> BLE -> Windows desktop test app
+- Windows desktop test app -> BLE -> ESP32 -> APRS message encoder -> TX
 - Phone -> BLE -> ESP32 -> APRS message encoder -> TX

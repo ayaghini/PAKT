@@ -10,6 +10,7 @@ Load only these files in order:
 3) doc/aprs_mvp_docs/agent_bootstrap/architecture_contracts.md
 4) doc/aprs_mvp_docs/agent_bootstrap/implementation_steps_mvp.md
 5) doc/aprs_mvp_docs/agent_bootstrap/qa_gates.md
+6) doc/aprs_mvp_docs/agent_bootstrap/device_loop.md (only if hardware is connected)
 
 Task:
 - Execute the next `todo` step only.

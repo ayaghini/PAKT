@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # ── Firmware build (ESP32-S3 via ESP-IDF) ──────────────────────────────────
+  firmware-build:
+    name: Firmware Build (ESP32-S3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build firmware
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3.2
+          target: esp32s3
+          path: firmware
+          command: idf.py build
+
+  # ── Host unit tests (pure-software, no hardware required) ──────────────────
+  host-tests:
+    name: Host Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get install -y cmake gcc g++ ninja-build
+
+      - name: Configure
+        run: cmake -S firmware/test_host -B build/test_host -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/test_host
+
+      - name: Run tests
+        run: ./build/test_host/pakt_tests --reporters=console --no-intro

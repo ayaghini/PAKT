@@ -34,6 +34,11 @@
 - Verify retry and timeout behavior
 
 ## 3) BLE + app tests
+- Windows desktop app:
+  - Connect/pair/reconnect stability
+  - Config read/write parity with firmware schema
+  - RX stream, TX request/result, telemetry decode validation
+  - Session log export and timestamp consistency
 - Pairing stability (Android, iOS)
 - Config persistence after reboot
 - Packet stream reliability under load

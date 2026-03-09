@@ -1,18 +1,19 @@
 project:
   name: PAKT
-  objective: "Battery-powered APRS pocket TNC/tracker with BLE phone app; later HF-capable unified app architecture"
-  phase: "Design->Implementation"
+  objective: "Battery-powered APRS pocket TNC/tracker with BLE desktop test app + phone app; later HF-capable unified app architecture"
+  phase: "Implementation"
   current_focus: "MVP APRS path (2m, SA818 + SGTL5000 + BLE)"
 
 mvp:
   radio:
     - "TX APRS position beacon"
-    - "RX APRS decode to phone"
+    - "RX APRS decode to BLE clients (desktop test app and phone app)"
     - "TX APRS message with retry/ack"
   gps:
     - "NMEA parse + stale-fix handling"
   ble:
     - "Config, command, status, RX stream, TX request/result"
+    - "Windows desktop BLE test app before phone app rollout"
     - "Encrypted + bonded writes"
   power:
     - "Li-ion charging + battery telemetry + low power mode"
@@ -20,7 +21,7 @@ mvp:
 core_components:
   mcu: "ESP32-S3"
   rf: "SA818"
-  codec: "SGTL5000 (primary candidate)"
+  codec: "SGTL5000"
   codec_alternatives:
     - "TLV320AIC3204"
     - "TLV320AIC3101/TLV320AIC3104"
@@ -58,7 +59,7 @@ regional_defaults:
 hard_constraints:
   - "1200 baud Bell 202 AFSK"
   - "AX.25 UI framing"
-  - "BLE-first mobile UX"
+  - "BLE-first client UX"
   - "Regional APRS frequency presets"
 
 top_risks:
@@ -82,6 +83,7 @@ implementation_policy:
   scope_unit: "One step at a time from implementation_steps_mvp.md"
   test_policy: "Touched behavior requires tests in same change"
   compatibility: "Ignore unknown fields; version protocol changes"
+  client_rollout_order: "Desktop BLE test app first, phone app second"
 
 do_not_assume:
   - "HF BLE audio streaming is production-ready"

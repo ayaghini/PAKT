@@ -3,16 +3,17 @@
 Date: 2026-02-27
 
 This folder contains the starter documentation set for a standalone APRS
-(1200 baud AFSK, AX.25) 2m device that connects to phones over BLE.
+(1200 baud AFSK, AX.25) 2m device that exposes BLE interfaces to desktop and phone clients.
 
 ## Goal (MVP)
 A pocket device that:
 - Transmits periodic APRS position beacons on 144.390 MHz (NA), configurable by region
-- Receives and decodes APRS packets and forwards them to the phone
-- Sends APRS messages from phone to RF with basic retry/ack handling
+- Receives and decodes APRS packets and forwards them to BLE clients
+- Sends APRS messages from BLE clients to RF with basic retry/ack handling
 - Uses GPS for position/time
 - Provides BLE configuration and live status
 - Runs from battery and charges over USB-C
+- Supports a Windows desktop BLE test app workflow before phone app rollout
 
 ## Contents
 - `docs/01_product_brief.md`
@@ -42,6 +43,7 @@ The bootstrap pack includes:
 - implementation step sequence with required evidence
 - QA gate criteria and failure handling
 - step-to-source mapping for minimal-context document loading
+- connected-device upload/debug/verify loop (`agent_bootstrap/device_loop.md`)
 
 ## Current hardware baseline
 - Audio codec: `SGTL5000` (with explicit `I2S_MCLK`)
@@ -58,8 +60,9 @@ The bootstrap pack includes:
 1. Confirm target region defaults and APRS path presets.
 2. Complete SGTL5000 + SA818 audio level calibration values for TX/RX.
 3. Build/validate the devkit prototype path with Feather-aligned power telemetry (`MAX17048`).
-4. Implement BLE GATT services and minimal phone app flows:
+4. Implement BLE GATT services and Windows desktop test app flows first:
    - set callsign/SSID, beacon interval, symbol, comment
-   - show RX packets and map
-   - send a message
-5. Complete TX beacon + RX decode loop, then message ACK/retry.
+   - show RX packets, status, and telemetry
+   - send TX request and capture TX result
+5. Add phone app UX flows after desktop harness is stable.
+6. Complete TX beacon + RX decode loop, then message ACK/retry.

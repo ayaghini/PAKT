@@ -2,6 +2,10 @@
 
 This document defines the Bluetooth Low Energy Generic Attribute Profile (GATT) for the APRS Pocket TNC.
 
+Client note:
+- MVP development uses a Windows desktop BLE test app first.
+- Phone app integration follows after desktop validation of GATT behavior.
+
 ## Services Overview
 
 The device will expose the following services:

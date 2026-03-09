@@ -7,7 +7,7 @@
 - `IStorage`: versioned config, atomic writes.
 
 ## B. BLE contract
-- Use current UUID map from `../docs/05_ble_gatt_spec.md`.
+- Use current UUID map from `../docs/05_ble_gatt_spec.md`. Base UUID: `544E4332-8A48-4328-9844-3F5C00000000`.
 - Writes for config/command/TX require encrypted+bonded link.
 - Chunking required above `(mtu-3)` with `msg_id/chunk_idx/chunk_total`.
 - Firmware must function at default MTU.
@@ -25,6 +25,7 @@
 - Separate transport (BLE) from mode logic (APRS/HF profiles).
 - UI never sends raw radio commands without validation.
 - Show explicit state for pending/ack/timeout.
+- Desktop test app must validate GATT behavior before phone UX features depend on it.
 
 ## E. Compatibility contract
 - New protocol behavior must be versioned.
@@ -39,4 +40,4 @@
 ## G. Error and recovery contract
 - Any unrecoverable TX/audio/radio error forces `PTT=off`.
 - Reinit paths must be idempotent (safe to call more than once).
-- Recovery logic must avoid unbounded retry loops.
+- Recovery logic must use bounded retries: maximum 3 attempts with at least 1 s between attempts; escalate to error state if all retries fail.

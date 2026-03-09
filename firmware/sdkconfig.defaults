@@ -1,0 +1,31 @@
+# PAKT Firmware – sdkconfig defaults
+# Toolchain: ESP-IDF v5.3.2  Target: esp32s3
+# These values are merged into sdkconfig on first build.
+# Run `idf.py menuconfig` to inspect or change; commit sdkconfig.defaults for reproducibility.
+
+# ── Bluetooth / NimBLE ────────────────────────────────────────────────────────
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+# One concurrent connection for MVP (phone only)
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+# Peripheral-only role; no central or observer needed for MVP
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+
+# ── FreeRTOS ─────────────────────────────────────────────────────────────────
+# 1 ms tick for precise audio timing and BLE scheduling
+CONFIG_FREERTOS_HZ=1000
+# Canary-word stack overflow detection (no watchpoint hardware cost)
+CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+# 3 = INFO; change to 4 (DEBUG) for development builds
+CONFIG_LOG_DEFAULT_LEVEL=3
+
+# ── C++ support ──────────────────────────────────────────────────────────────
+CONFIG_COMPILER_CXX_EXCEPTIONS=y
+CONFIG_COMPILER_CXX_RTTI=n
+
+# ── Task watchdog ─────────────────────────────────────────────────────────────
+CONFIG_ESP_TASK_WDT_EN=y
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
