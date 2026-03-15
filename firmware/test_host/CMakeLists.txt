@@ -45,6 +45,8 @@ set(TELEM_INCLUDE    "${COMP}/telemetry/include")
 set(TELEM_SRC        "${COMP}/telemetry/Telemetry.cpp")
 set(CAP_INCLUDE      "${COMP}/capability/include")
 set(CAP_SRC          "${COMP}/capability/DeviceCapabilities.cpp")
+set(GPS_INCLUDE      "${COMP}/gps/include")
+set(GPS_SRC          "${COMP}/gps/NmeaParser.cpp")
 
 # ── Test executable ───────────────────────────────────────────────────────────
 add_executable(pakt_tests
@@ -57,6 +59,7 @@ add_executable(pakt_tests
     test_tx_scheduler.cpp
     test_telemetry.cpp
     test_capability.cpp
+    test_nmea_parser.cpp
     # Component sources compiled directly (no ESP-IDF build system needed)
     ${AX25_SRC}
     ${APRS_SRC}
@@ -65,6 +68,7 @@ add_executable(pakt_tests
     ${FSM_SRC}
     ${TELEM_SRC}
     ${CAP_SRC}
+    ${GPS_SRC}
 )
 
 target_include_directories(pakt_tests PRIVATE
@@ -77,6 +81,7 @@ target_include_directories(pakt_tests PRIVATE
     ${FSM_INCLUDE}
     ${TELEM_INCLUDE}
     ${CAP_INCLUDE}
+    ${GPS_INCLUDE}
     ${doctest_SOURCE_DIR}/doctest      # provides <doctest/doctest.h>
 )
 

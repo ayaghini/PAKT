@@ -37,6 +37,13 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Evidence (software done): ble_services component (components/ble_services/): BleChunker (pure C++ splitter/reassembler), BleServer (NimBLE GATT server with all 9 characteristics across 3 services, encrypted+bonded write enforcement, rate-limited notify). BleChunker host unit tests in test_host/test_ble_chunker.cpp. BleServer requires hardware for full GATT/security validation.
 - Residual risk: BleServer encrypted+bonded write rejection and GATT endpoint validation blocked until prototype hardware is available. Stub handlers in main.cpp ble_task will be replaced when APRS logic is wired in (Steps 6-7).
 
+## Step 4b - GPS/NMEA parser (FW-005)
+- IDs: FW-005
+- Status: done (software; hardware integration pending)
+- Exit: GPRMC/GPGGA parsed correctly; stale-fix management operational; GpsTelem populated
+- Evidence: firmware/components/gps/ — NmeaParser (feed() byte-stream + process() batch interface, GPRMC/GNRMC + GPGGA/GNGGA, checksum verification, decimal-degree conversion, Unix timestamp from date+time, stale-fix mark_stale/reset). 37 host unit tests in test_host/test_nmea_parser.cpp. gps_task in main.cpp updated to use NmeaParser with 5 s stale-fix timeout and 1 Hz BLE notify publish (UART read stubbed pending hardware).
+- Residual risk: UART byte-stream path (NEO-M8N on board's GPS port) blocked until hardware; timing/level validated on hardware. gps_task UART stub must be replaced before real GPS data flows.
+
 ## Step 5 - Desktop BLE test app baseline
 - IDs: APP-000
 - Status: in_progress
@@ -76,8 +83,8 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - IDs: INT-001, INT-003, DOC-004
 - Status: in_progress
 - Exit: capability negotiation + draft KISS-over-BLE interop
-- Evidence (software done): DeviceCapabilities component (components/capability/): feature bitmask, JSON serialiser, mvp_defaults(), has() API; 16 host unit tests in test_capability.cpp. kDeviceCapabilities UUID (0xA0040000) added to BleUuids.h. Python capability.py: DeviceCapabilities parser (protocol, fw_ver, hw_rev, features frozenset), CapabilityNegotiator (read on connect, assumed_mvp() fallback, feature flag API, on_caps callback with CAPS_WARN for missing MVP features, reset on disconnect); 28 pytest tests in test_capability.py. pakt_client.py reads capabilities on connect, exposes capabilities property, logs CAPS/CAPS_WARN. CI app-tests updated. INT-003 draft spec: docs/16_kiss_over_ble_spec.md — KISS Service UUIDs, chunked frame transport, TX/RX paths, multi-client arbitration, capability flag, open questions. DOC-004: docs/15_interoperability_matrix.md — platform matrix for Windows/macOS/Linux/Android/iOS, KISS bridge compat table, frequency configs, known limitations, hardware validation checklist.
-- Residual risk: Device Capabilities characteristic not yet wired into BleServer (requires hardware bring-up); CapabilityNegotiator falls back to assumed_mvp() until then. KISS profile deferred to M3.
+- Evidence (software done): DeviceCapabilities component (components/capability/): feature bitmask, JSON serialiser, mvp_defaults(), has() API; 16 host unit tests in test_capability.cpp. kDeviceCapabilities UUID (0xA0040000) added to BleUuids.h and now wired into BleServer GATT table as a read-only characteristic (2026-03-14): BleServer::Handlers gained on_caps_read callback, aprs_chars[] gained a BLE_GATT_CHR_F_READ entry for uuid_dev_caps, aprs_access_cb handles the read and falls back to `{}` if the handler is not set, main.cpp ble_task wires on_caps_read to DeviceCapabilities::mvp_defaults().to_json(). Python capability.py: DeviceCapabilities parser (protocol, fw_ver, hw_rev, features frozenset), CapabilityNegotiator (read on connect, assumed_mvp() fallback, feature flag API, on_caps callback with CAPS_WARN for missing MVP features, reset on disconnect); 28 pytest tests in test_capability.py. pakt_client.py reads capabilities on connect, exposes capabilities property, logs CAPS/CAPS_WARN. CI app-tests updated. INT-003 draft spec: docs/16_kiss_over_ble_spec.md — KISS Service UUIDs, chunked frame transport, TX/RX paths, multi-client arbitration, capability flag, open questions. DOC-004: docs/15_interoperability_matrix.md — platform matrix for Windows/macOS/Linux/Android/iOS, KISS bridge compat table, frequency configs, known limitations, hardware validation checklist.
+- Residual risk: CapabilityNegotiator fallback to assumed_mvp() will be exercised until hardware validates the actual BLE read. KISS profile deferred to M3.
 
 ## Step 11 - HF discovery track
 - IDs: HF-001..HF-011

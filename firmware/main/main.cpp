@@ -17,6 +17,8 @@
 #include "esp_system.h"
 
 #include "pakt/BleServer.h"
+#include "pakt/DeviceCapabilities.h"
+#include "pakt/NmeaParser.h"
 #include <cstring>
 
 static const char *TAG = "pakt";
@@ -79,9 +81,54 @@ static void aprs_task(void *arg)
 
 static void gps_task(void *arg)
 {
-    // Step 5: NMEA parser + stale-fix management
-    ESP_LOGI("gps", "task started (stub)");
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(100)); }
+    // Step 5: NMEA parser + stale-fix management (FW-005)
+    //
+    // TODO(hardware): replace uart_read_bytes stub with real UART driver for
+    //                 NEO-M8N on the board's GPS UART port.
+    //
+    // The parser runs here; telemetry is published via BleServer::notify_gps()
+    // once the BLE task is running and a client is subscribed.
+
+    static constexpr uint32_t kStaleMs     = 5000;   // mark stale after 5 s silence
+    static constexpr uint32_t kTickMs      = 100;    // task period
+    static constexpr uint32_t kPublishMs   = 1000;   // publish GPS telemetry at 1 Hz
+
+    ESP_LOGI("gps", "task started (FW-005)");
+
+    pakt::NmeaParser parser;
+    uint32_t last_valid_ms  = 0;
+    uint32_t last_publish_ms = 0;
+
+    for (;;) {
+        const uint32_t now_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+
+        // ── Stale-fix check ───────────────────────────────────────────────────
+        if (parser.valid() && (now_ms - last_valid_ms) >= kStaleMs) {
+            ESP_LOGW("gps", "GPS fix stale (>%u ms)", kStaleMs);
+            parser.mark_stale();
+        }
+
+        // ── UART read placeholder ─────────────────────────────────────────────
+        // Replace with:
+        //   uint8_t byte;
+        //   while (uart_read_bytes(GPS_UART_NUM, &byte, 1, 0) == 1) {
+        //       if (parser.feed(byte)) last_valid_ms = now_ms;
+        //   }
+
+        // ── Publish GPS telemetry via BLE ─────────────────────────────────────
+        if ((now_ms - last_publish_ms) >= kPublishMs && parser.valid()) {
+            const pakt::GpsTelem &fix = parser.fix();
+            char buf[256];
+            size_t n = fix.to_json(buf, sizeof(buf));
+            if (n > 0) {
+                pakt::BleServer::instance().notify_gps(
+                    reinterpret_cast<const uint8_t *>(buf), n);
+            }
+            last_publish_ms = now_ms;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(kTickMs));
+    }
 }
 
 static void ble_task(void *arg)
@@ -99,6 +146,10 @@ static void ble_task(void *arg)
     handlers.on_config_write = [](const uint8_t *, size_t) { return true; };
     handlers.on_command      = [](const uint8_t *, size_t) { return true; };
     handlers.on_tx_request   = [](const uint8_t *, size_t) { return true; };
+    handlers.on_caps_read = [](uint8_t *buf, size_t max) -> size_t {
+        auto caps = pakt::DeviceCapabilities::mvp_defaults();
+        return caps.to_json(reinterpret_cast<char *>(buf), max);
+    };
 
     if (!pakt::BleServer::instance().init(handlers, "PAKT-TNC")) {
         ESP_LOGE("ble", "BleServer init failed");

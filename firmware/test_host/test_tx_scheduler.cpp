@@ -3,7 +3,6 @@
 // No hardware or RTOS required.  Uses doctest.
 // Run: ./build/test_host/pakt_tests --reporters=console --no-intro
 
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 #include "pakt/TxScheduler.h"
@@ -50,7 +49,7 @@ static TxScheduler make_sched(FakeTx &tx, FakeResult &res) {
 TEST_CASE("enqueue: basic success") {
     FakeTx tx; FakeResult res;
     auto sched = make_sched(tx, res);
-    char id[TxScheduler::kMaxMsgIdStr]{};
+    char id[kMaxMsgIdStr]{};
     auto r = sched.enqueue(1, "W1AW", 0, "Hello", 0, id);
     CHECK(r == EnqueueResult::OK);
     CHECK(id[0] != '\0');
@@ -106,8 +105,8 @@ TEST_CASE("enqueue: queue full returns QUEUE_FULL") {
 TEST_CASE("enqueue: assigns unique monotonic msg IDs") {
     FakeTx tx; FakeResult res;
     auto sched = make_sched(tx, res);
-    char id1[TxScheduler::kMaxMsgIdStr]{};
-    char id2[TxScheduler::kMaxMsgIdStr]{};
+    char id1[kMaxMsgIdStr]{};
+    char id2[kMaxMsgIdStr]{};
     sched.enqueue(1, "W1AW", 0, "first",  0, id1);
     sched.enqueue(2, "W1AW", 0, "second", 0, id2);
     CHECK(std::string(id1) != std::string(id2));
@@ -200,7 +199,7 @@ TEST_CASE("tick: TIMED_OUT result fires result callback with correct client_id")
 TEST_CASE("on_ack_received: matches correct message ID") {
     FakeTx tx; FakeResult res;
     auto sched = make_sched(tx, res);
-    char id[TxScheduler::kMaxMsgIdStr]{};
+    char id[kMaxMsgIdStr]{};
     sched.enqueue(1, "W1AW", 0, "Hello", 0, id);
     sched.tick(0);   // → PENDING
     bool acked = sched.on_ack_received(id);
@@ -230,7 +229,7 @@ TEST_CASE("on_ack_received: null ID returns false") {
 TEST_CASE("on_ack_received: ignores already-terminal messages") {
     FakeTx tx; FakeResult res;
     auto sched = make_sched(tx, res);
-    char id[TxScheduler::kMaxMsgIdStr]{};
+    char id[kMaxMsgIdStr]{};
     sched.enqueue(1, "W1AW", 0, "Hello", 0, id);
     sched.tick(0);
     sched.on_ack_received(id);   // → ACKED
@@ -270,7 +269,7 @@ TEST_CASE("cancel: returns false for unknown client_id") {
 TEST_CASE("cancel: returns false for already-terminal message") {
     FakeTx tx; FakeResult res;
     auto sched = make_sched(tx, res);
-    char id[TxScheduler::kMaxMsgIdStr]{};
+    char id[kMaxMsgIdStr]{};
     sched.enqueue(3, "W1AW", 0, "Hi", 0, id);
     sched.tick(0);
     sched.on_ack_received(id);  // → ACKED
@@ -285,7 +284,7 @@ TEST_CASE("slot recycling: terminal slot reused when queue would otherwise be fu
 
     // Fill queue with 8 messages that are sent and acked immediately.
     for (size_t i = 0; i < TxScheduler::kMaxQueue; ++i) {
-        char id[TxScheduler::kMaxMsgIdStr]{};
+        char id[kMaxMsgIdStr]{};
         sched.enqueue(static_cast<uint8_t>(i), "W1AW", 0, "Hi",
                       static_cast<uint32_t>(i), id);
         sched.tick(static_cast<uint32_t>(i));
@@ -307,8 +306,8 @@ TEST_CASE("multiple concurrent messages: each follows independent state machine"
     FakeTx tx; FakeResult res;
     auto sched = make_sched(tx, res);
 
-    char id1[TxScheduler::kMaxMsgIdStr]{};
-    char id2[TxScheduler::kMaxMsgIdStr]{};
+    char id1[kMaxMsgIdStr]{};
+    char id2[kMaxMsgIdStr]{};
     sched.enqueue(1, "K1AAA", 0, "msg one", 0, id1);
     sched.enqueue(2, "K2BBB", 0, "msg two", 0, id2);
 

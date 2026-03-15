@@ -107,7 +107,12 @@ class MessageTracker:
 
         msg = self._messages.get(msg_id)
         if msg is None:
-            return None
+            # The firmware assigned a new numeric ID; remap the oldest pending
+            # local placeholder to this firmware-assigned ID so subsequent
+            # result notifications (acked/timeout) can find the message.
+            msg = self._remap_placeholder(msg_id)
+            if msg is None:
+                return None
 
         if status == "acked":
             msg.resolve(MsgState.ACKED)
@@ -170,6 +175,27 @@ class MessageTracker:
         return self._messages.get(msg_id) if msg_id else None
 
     # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _remap_placeholder(self, firmware_msg_id: str) -> Optional[TrackedMessage]:
+        """Remap the oldest pending local-placeholder entry to a firmware-assigned ID.
+
+        When a TX request is sent, the message is stored under a ``local:N``
+        placeholder because the firmware-assigned ``msg_id`` is not known until
+        the first TX result notification arrives.  This method re-keys the
+        message so all subsequent lookups succeed.
+        """
+        placeholder = next(
+            (mid for mid, m in self._messages.items()
+             if mid.startswith("local:") and not m.state.is_terminal()),
+            None,
+        )
+        if placeholder is None:
+            return None
+        msg = self._messages.pop(placeholder)
+        msg.msg_id = firmware_msg_id
+        self._messages[firmware_msg_id] = msg
+        self._by_client[msg.client_id] = firmware_msg_id
+        return msg
 
     def _notify(self, msg: TrackedMessage) -> None:
         if self._on_update:

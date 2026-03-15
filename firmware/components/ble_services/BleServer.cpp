@@ -38,6 +38,7 @@ static const ble_uuid128_t uuid_telm_svc     = UUID128(pakt::uuids::kTelemetrySe
 static const ble_uuid128_t uuid_dev_config   = UUID128(pakt::uuids::kDeviceConfig);
 static const ble_uuid128_t uuid_dev_command  = UUID128(pakt::uuids::kDeviceCommand);
 static const ble_uuid128_t uuid_dev_status   = UUID128(pakt::uuids::kDeviceStatus);
+static const ble_uuid128_t uuid_dev_caps     = UUID128(pakt::uuids::kDeviceCapabilities);
 static const ble_uuid128_t uuid_rx_packet    = UUID128(pakt::uuids::kRxPacketStream);
 static const ble_uuid128_t uuid_tx_request   = UUID128(pakt::uuids::kTxRequest);
 static const ble_uuid128_t uuid_tx_result    = UUID128(pakt::uuids::kTxResult);
@@ -60,6 +61,7 @@ static int telm_access_cb(uint16_t conn_h, uint16_t attr_h,
 static uint16_t g_h_dev_config   = 0;
 static uint16_t g_h_dev_command  = 0;
 static uint16_t g_h_dev_status   = 0;
+static uint16_t g_h_dev_caps     = 0;
 static uint16_t g_h_rx_packet    = 0;
 static uint16_t g_h_tx_request   = 0;
 static uint16_t g_h_tx_result    = 0;
@@ -87,6 +89,13 @@ static const struct ble_gatt_chr_def aprs_chars[] = {
         .access_cb   = aprs_access_cb,
         .val_handle  = &g_h_dev_status,
         .flags       = BLE_GATT_CHR_F_NOTIFY,
+    },
+    {
+        // Device Capabilities: read-only, no security restriction (INT-001).
+        .uuid        = &uuid_dev_caps.u,
+        .access_cb   = aprs_access_cb,
+        .val_handle  = &g_h_dev_caps,
+        .flags       = BLE_GATT_CHR_F_READ,
     },
     {
         .uuid        = &uuid_rx_packet.u,
@@ -177,21 +186,6 @@ static void on_tx_req_chunk_complete(const uint8_t *data, size_t len);
 
 static pakt::BleChunker g_config_chunker(on_config_chunk_complete);
 static pakt::BleChunker g_tx_req_chunker(on_tx_req_chunk_complete);
-
-static void on_config_chunk_complete(const uint8_t *data, size_t len)
-{
-    pakt::BleServer &srv = pakt::BleServer::instance();
-    if (srv.is_connected()) {
-        // Handlers are not directly accessible here; call via internal shim.
-        // (Actual dispatch handled in aprs_access_cb after reassembly.)
-        (void)data; (void)len;
-    }
-}
-
-static void on_tx_req_chunk_complete(const uint8_t *data, size_t len)
-{
-    (void)data; (void)len;
-}
 
 // ── Security helper ───────────────────────────────────────────────────────────
 
@@ -323,13 +317,26 @@ static int aprs_access_cb(uint16_t conn_h, uint16_t attr_h,
     pakt::BleServer &srv = pakt::BleServer::instance();
     (void)attr_h;
 
-    // ── Read: Device Config ───────────────────────────────────────────────────
+    // ── Read ──────────────────────────────────────────────────────────────────
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
         if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_dev_config.u) == 0) {
             if (!srv.handlers_.on_config_read) return BLE_ATT_ERR_UNLIKELY;
             uint8_t buf[256];
             size_t n = srv.handlers_.on_config_read(buf, sizeof(buf));
             if (n == 0) return BLE_ATT_ERR_UNLIKELY;
+            return os_mbuf_append(ctxt->om, buf, n) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
+        if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_dev_caps.u) == 0) {
+            uint8_t buf[256];
+            size_t n = 0;
+            if (srv.handlers_.on_caps_read) {
+                n = srv.handlers_.on_caps_read(buf, sizeof(buf));
+            }
+            if (n == 0) {
+                // Fallback: empty JSON object if handler not wired.
+                buf[0] = '{'; buf[1] = '}';
+                n = 2;
+            }
             return os_mbuf_append(ctxt->om, buf, n) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
         return BLE_ATT_ERR_READ_NOT_PERMITTED;
@@ -469,6 +476,7 @@ bool BleServer::init(const Handlers &handlers, const char *device_name)
     h_dev_config_   = g_h_dev_config;
     h_dev_command_  = g_h_dev_command;
     h_dev_status_   = g_h_dev_status;
+    h_dev_caps_     = g_h_dev_caps;
     h_rx_packet_    = g_h_rx_packet;
     h_tx_request_   = g_h_tx_request;
     h_tx_result_    = g_h_tx_result;

@@ -1,6 +1,5 @@
 // test_capability.cpp – Host unit tests for DeviceCapabilities (INT-001)
 
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
 #include "pakt/DeviceCapabilities.h"

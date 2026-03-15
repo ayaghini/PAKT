@@ -48,9 +48,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: pip install pytest
-        # bleak is intentionally not installed: tests only import chunker.py,
-        # config_store.py, and transport.py, which mock all bleak calls.
+        run: pip install -r app/desktop_test/requirements.txt
+        # requirements.txt includes bleak and pytest.
+        # bleak must be installed even in CI: transport.py imports it at module
+        # level, so the import fails before mocks are applied if bleak is absent.
         # ubuntu-latest ships Python 3.x; no setup-python step needed.
 
       - name: Run app tests

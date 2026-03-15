@@ -3,6 +3,54 @@
 Date: 2026-03-09
 Scope: review of recently added/updated firmware and desktop test app code, plus CI verification path.
 
+## Fix Log (2026-03-14)
+
+All findings below have been resolved in the same session. Fixed-by references indicate the changed file.
+
+| # | Severity | Status | Fixed in |
+|---|----------|--------|----------|
+| R1 | Critical | **FIXED** | `test_tx_scheduler.cpp`, `test_capability.cpp`, `test_telemetry.cpp` |
+| R2 | Critical | **FIXED** | `test_tx_scheduler.cpp` |
+| R3 | High     | **FIXED** | `message_tracker.py` |
+| F1 | Critical | **FIXED** | `BleServer.cpp` |
+| F2 | High     | **FIXED** | `.github/workflows/ci.yml` |
+| F3 | Medium   | **FIXED** | `BleChunker.cpp` |
+| F4 | Low      | deferred – cosmetic only | — |
+
+---
+
+## Fix Details (2026-03-14)
+
+### R1 – Multiple `main()` definitions (Critical) — FIXED
+- Removed `#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN` from `test_tx_scheduler.cpp`, `test_capability.cpp`, and `test_telemetry.cpp`.
+- The macro now appears only in `test_main.cpp` (the designated entry-point TU).
+
+### R2 – `TxScheduler::kMaxMsgIdStr` undefined (Critical) — FIXED
+- `kMaxMsgIdStr` is defined at namespace scope (`pakt::kMaxMsgIdStr`) in `TxMessage.h`, not as a `TxScheduler` member.
+- Replaced all six occurrences of `TxScheduler::kMaxMsgIdStr` with `kMaxMsgIdStr` in `test_tx_scheduler.cpp`; `using namespace pakt;` already in scope.
+
+### R3 – TX result tracking cannot correlate firmware msg_id (High) — FIXED
+- Added `MessageTracker._remap_placeholder(firmware_msg_id)` in `message_tracker.py`.
+- When `on_tx_result` receives a `msg_id` not in `_messages`, it remaps the oldest pending `local:N` placeholder entry to the firmware-assigned ID, then processes normally.
+- All subsequent `acked`/`timeout`/`error` notifications for that message are now resolved correctly.
+
+### F1 – Duplicate function definitions in BleServer.cpp (Critical) — FIXED
+- Removed the stub bodies of `on_config_chunk_complete` (old lines 181–189) and `on_tx_req_chunk_complete` (old lines 191–194) that appeared immediately after the chunker globals.
+- The forward declarations at lines 175–176 are retained; the real implementations later in the file (`on_config_chunk_complete` forwarding to `handlers_.on_config_write`, `on_tx_req_chunk_complete` forwarding to `handlers_.on_tx_request`) are the sole definitions.
+
+### F2 – CI missing `bleak` dependency (High) — FIXED
+- Changed the `app-tests` CI step from `pip install pytest` to `pip install -r app/desktop_test/requirements.txt`.
+- `requirements.txt` already declares `bleak>=0.22.0` and `pytest>=8.0.0`, so no new files were needed.
+
+### F3 – Slot eviction wrong comparison in BleChunker (Medium) — FIXED
+- Old: `if ((s.start_ms - oldest->start_ms) > timeout_ms_)` — compares slot-to-slot delta against timeout, not actual age.
+- New: `if ((now_ms - s.start_ms) > (now_ms - oldest->start_ms))` — compares monotonic ages of each slot; uint32_t subtraction handles wrap correctly for ages < 2³¹ ms.
+
+### F4 – Text encoding artifacts (Low) — deferred
+- Cosmetic issue in comments and CLI log strings. No runtime impact. Deferred to a housekeeping pass.
+
+---
+
 ## Refresh Review (new updates observed later on 2026-03-09)
 
 ### New findings (ordered by severity)

@@ -52,6 +52,10 @@ public:
 
         // Called after a fully-reassembled TX Request write (encrypted + bonded).
         std::function<bool(const uint8_t *data, size_t len)> on_tx_request;
+
+        // Called on a Device Capabilities read; fill `buf` with UTF-8 JSON, return byte count.
+        // Read-only, no security restriction.  If null, returns an empty object.
+        std::function<size_t(uint8_t *buf, size_t max_len)> on_caps_read;
     };
 
     static BleServer &instance();
@@ -93,6 +97,7 @@ private:
     uint16_t h_dev_config_    = 0;
     uint16_t h_dev_command_   = 0;
     uint16_t h_dev_status_    = 0;
+    uint16_t h_dev_caps_      = 0;
     uint16_t h_rx_packet_     = 0;
     uint16_t h_tx_request_    = 0;
     uint16_t h_tx_result_     = 0;

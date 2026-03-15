@@ -128,9 +128,11 @@ BleChunker::Slot *BleChunker::alloc_slot(
     }
 
     // All slots occupied (tick() did not free any); evict the oldest.
+    // Compare monotonic ages: (now_ms - s.start_ms) > (now_ms - oldest->start_ms).
+    // uint32_t subtraction handles wrap correctly as long as ages stay < 2^31.
     Slot *oldest = &slots_[0];
     for (auto &s : slots_) {
-        if ((s.start_ms - oldest->start_ms) > timeout_ms_) oldest = &s;
+        if ((now_ms - s.start_ms) > (now_ms - oldest->start_ms)) oldest = &s;
     }
     oldest->msg_id        = msg_id;
     oldest->chunk_total   = chunk_total;
