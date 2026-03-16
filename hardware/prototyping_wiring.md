@@ -2,6 +2,9 @@
 
 This document defines a wiring baseline that can be transferred into schematic capture and first-pass PCB layout.
 
+For the breakout-board prototype stack (ESP32-S3 Feather + Teensy Audio Rev D + SA818 + u-blox M8), see:
+- `hardware/prototype_breakout_wiring_plan.md`
+
 ## Scope and assumptions
 - Target architecture: ESP32-S3 + SA818 + SGTL5000 + NEO-M8N + MAX17048.
 - Logic domain is 3.3V unless a module explicitly requires otherwise.

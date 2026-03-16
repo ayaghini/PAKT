@@ -47,6 +47,17 @@ set(CAP_INCLUDE      "${COMP}/capability/include")
 set(CAP_SRC          "${COMP}/capability/DeviceCapabilities.cpp")
 set(GPS_INCLUDE      "${COMP}/gps/include")
 set(GPS_SRC          "${COMP}/gps/NmeaParser.cpp")
+set(CODEC_INCLUDE    "${COMP}/payload_codec/include")
+set(CODEC_SRC        "${COMP}/payload_codec/PayloadValidator.cpp")
+set(FSM_EXTRA_SRC    "${COMP}/aprs_fsm/TxResultEncoder.cpp"
+                     "${COMP}/aprs_fsm/AprsTaskContext.cpp")
+set(WATCHDOG_INCLUDE "${COMP}/safety_watchdog/include")
+set(WATCHDOG_SRC     "${COMP}/safety_watchdog/PttWatchdog.cpp"
+                     "${COMP}/safety_watchdog/PttController.cpp")
+set(SA818_INCLUDE    "${COMP}/radio_sa818/include")
+set(SA818_SRC        "${COMP}/radio_sa818/Sa818CommandFormatter.cpp"
+                     "${COMP}/radio_sa818/Sa818ResponseParser.cpp"
+                     "${COMP}/radio_sa818/Sa818Radio.cpp")
 
 # ── Test executable ───────────────────────────────────────────────────────────
 add_executable(pakt_tests
@@ -60,15 +71,24 @@ add_executable(pakt_tests
     test_telemetry.cpp
     test_capability.cpp
     test_nmea_parser.cpp
+    test_payload_validator.cpp
+    test_tx_integration.cpp
+    test_ptt_watchdog.cpp
+    test_config_store.cpp
+    test_sa818.cpp
     # Component sources compiled directly (no ESP-IDF build system needed)
     ${AX25_SRC}
     ${APRS_SRC}
     ${MODEM_SRC}
     ${BLE_SRC}
     ${FSM_SRC}
+    ${FSM_EXTRA_SRC}
     ${TELEM_SRC}
     ${CAP_SRC}
     ${GPS_SRC}
+    ${CODEC_SRC}
+    ${WATCHDOG_SRC}
+    ${SA818_SRC}
 )
 
 target_include_directories(pakt_tests PRIVATE
@@ -82,6 +102,9 @@ target_include_directories(pakt_tests PRIVATE
     ${TELEM_INCLUDE}
     ${CAP_INCLUDE}
     ${GPS_INCLUDE}
+    ${CODEC_INCLUDE}
+    ${WATCHDOG_INCLUDE}
+    ${SA818_INCLUDE}
     ${doctest_SOURCE_DIR}/doctest      # provides <doctest/doctest.h>
 )
 

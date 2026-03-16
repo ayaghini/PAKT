@@ -319,7 +319,7 @@ async def _main() -> None:
 
                 elif choice == "7":
                     raw = _prompt_json(
-                        '{"to":"CQ","text":"Hello from PAKT","msg_id":"01"}',
+                        '{"dest":"APRS","text":"Hello from PAKT","ssid":0}',
                         "TX Request JSON: ",
                     )
                     if raw:

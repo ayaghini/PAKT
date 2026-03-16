@@ -56,7 +56,7 @@ struct GpsTelem {
     float    course_deg;   // true north, 0–360
     uint8_t  sats_used;
     uint8_t  fix_quality;  // 0=none,1=GPS,2=DGPS
-    uint32_t timestamp_s;  // GPS seconds-of-week, 0 if unavailable
+    uint32_t timestamp_s;  // Unix timestamp (seconds since 1970-01-01 UTC), 0 if unknown
 
     size_t to_json(char *buf, size_t buf_len) const;
 };

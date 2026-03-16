@@ -137,6 +137,8 @@ class SysTelem:
     def parse(cls, json_str: str) -> Optional["SysTelem"]:
         try:
             d = json.loads(json_str)
+            if not isinstance(d, dict):
+                return None
             return cls(
                 free_heap = int(d.get("free_heap", 0)),
                 min_heap  = int(d.get("min_heap", 0)),

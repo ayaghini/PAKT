@@ -154,7 +154,9 @@ class MessageTracker:
     def recent(self, n: int = 20) -> list[TrackedMessage]:
         """Most recent n messages (any state), newest first."""
         msgs = list(self._messages.values())
-        msgs.sort(key=lambda m: m.queued_at, reverse=True)
+        # Secondary sort by client_id breaks ties when queued_at is identical
+        # (common in fast test execution and rapid burst sends).
+        msgs.sort(key=lambda m: (m.queued_at, m.client_id), reverse=True)
         return msgs[:n]
 
     def clear_resolved(self) -> int:

@@ -11,11 +11,13 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Connected-board add-on: command profile selected + first successful flash/boot log capture
 
 ## Step 1 - Hardware control baseline
-- IDs: HW-002, FW-002, FW-003
+- IDs: HW-002, FW-002, FW-003, FW-016
 - Status: in_progress
 - Exit: SA818 driver works on bench; PTT safe-off verified
-- Evidence (FW-002 done): IAudioIO/IRadioControl/IPacketLink/IStorage interfaces in firmware/components/pakt_hal/include/pakt/; mocks in mock/; 40 host unit tests passing in firmware/test_host/. FW-003 (SA818 driver) blocked pending hardware.
-- Residual risk: FW-003 SA818 driver and HW-002 electrical validation blocked until prototype hardware is available.
+- Evidence (FW-002 done): IAudioIO/IRadioControl/IPacketLink/IStorage interfaces in firmware/components/pakt_hal/include/pakt/; mocks in mock/; 40 host unit tests passing in firmware/test_host/. FW-003 (SA818 driver) software-complete (see below).
+- Evidence (FW-003 done — software): Sa818Radio component (firmware/components/radio_sa818/): ISa818Transport (injectable UART abstraction), Sa818CommandFormatter (connect/set_group AT builders), Sa818ResponseParser (Ok/Error/Unknown classifier), Sa818Radio (IRadioControl impl; idempotent set_freq; force_ptt_off on any UART failure). Sa818UartTransport (firmware/main/Sa818UartTransport.h): ESP-IDF UART1 concrete transport, excluded from host tests. radio_task wired: GPIO11 configured as PTT output (default HIGH=off), direct-GPIO safe-off callback registered before init(), uart_driver_install + SA818 init + APRS freq set, safe-off callback upgraded to radio.ptt(false) after successful init. 18 host unit tests in test_host/test_sa818.cpp covering formatter, parser, and Sa818Radio state machine (PTT before/after init, init success/failure/timeout, set_freq idempotency, set_freq failure, ptt(false) in error state).
+- Evidence (FW-016 done — software): PttWatchdog + PttController components (firmware/components/safety_watchdog/): pure C++ IDLE→ARMED→TRIGGERED FSM; 10 s default timeout; safe_fn fires exactly once via compare_exchange_strong; heartbeat() recovery path; PttController provides settable safe-off hook (ptt_register_safe_off / ptt_safe_off / ptt_is_registered). 21 host unit tests in test_host/test_ptt_watchdog.cpp covering all state transitions, wrap-around arithmetic, force_safe idempotency, PttController no-op/registered/watchdog-integration/state-transition cases, and RadioControlMock integration. watchdog_task wired into main.cpp at priority 6 (ticks every 500 ms); aprs_task calls heartbeat() each loop iteration; safe_fn calls pakt::ptt_safe_off(). radio_task now registers direct-GPIO safe-off before SA818 init and upgrades to `radio.ptt(false)` after successful init.
+- Residual risk: FW-003 SA818 electrical validation (UART handshake, PTT polarity, audio deviation) blocked until prototype hardware is available (bench checklist step 5). FW-016 hardware portion (hardware PTT fault injection) blocked pending EVT prototype. Sa818Radio software integration is complete.
 
 ## Step 2 - Audio pipeline baseline (SGTL5000)
 - IDs: FW-004, QA-002
@@ -63,7 +65,8 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Status: in_progress
 - Exit: send->pending->ack/timeout flow works reliably
 - Evidence (software done): TxMessage + TxScheduler (components/aprs_fsm/): static 8-slot queue, 5-retry policy at 20 s intervals, enqueue/tick/on_ack_received/cancel API, result callback fires on ACKED/TIMED_OUT/CANCELLED. 26 host unit tests in test_host/test_tx_scheduler.cpp. Python MessageTracker (app/desktop_test/message_tracker.py): MsgState FSM, on_sent/on_tx_result/cancel/pending/recent/clear_resolved API; 37 pytest tests in test_messaging.py. pakt_client.py routes tx_result notify into MessageTracker; main.py adds [9] message queue view. CI app-tests updated to include test_messaging.py.
-- Residual risk: full send→ack/timeout flow requires hardware (firmware TxScheduler wired into APRS task, radio TX, and ack detection). BLE TX result notify format must be confirmed against firmware implementation when hardware is available.
+- Evidence (DeviceConfigStore + NvsStorage done — software): DeviceConfigStore (firmware/components/payload_codec/include/pakt/DeviceConfigStore.h): header-only class; set_storage(IStorage*) attaches backend after construction; apply(ConfigFields&) updates in-memory DeviceConfig and calls storage_->save() if backend set; load() populates from storage on startup; in-memory always updated regardless of persist result. NvsStorage (firmware/main/NvsStorage.h): concrete IStorage using ESP-IDF NVS blob API (namespace "pakt_cfg", key "device_config", schema_version guard, nvs_commit() on every save). app_main() NVS boot path: nvs_flash_init() → erase+reinit if needed → set_storage + load() with explicit log for loaded/defaults/failure outcomes; tasks created after config is ready. Wired in main.cpp on_config_write: apply() called after PayloadValidator acceptance; logs persist success or in-memory-only warning. Wired on_config_read to `DeviceConfigStore::config_to_json(g_device_config.config(), ...)`. 7 host tests in test_host/test_config_store.cpp covering in-memory update, storage backend save, persist failure, load-without-storage defaults, and config_to_json behavior.
+- Residual risk: full send→ack/timeout flow requires hardware (firmware TxScheduler wired into APRS task, radio TX, and ack detection). BLE TX result notify format must be confirmed against firmware implementation when hardware is available. NVS persistence for DeviceConfigStore requires hardware (flash + ESP-IDF NVS driver) — NvsStorage code is complete but untested on-device.
 
 ## Step 8 - Telemetry and operator UX
 - IDs: APP-004, APP-005, FW-015
@@ -92,4 +95,5 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Exit: go/no-go decision record for production HF audio bridge
 - Evidence: latency/jitter/battery measurements and explicit decision rationale
 - Note: This is a discovery track that can run alongside Steps 9-10 if a second agent is available, but must not block MVP milestone closure. A single agent should complete Steps 0-10 before starting Step 11.
+
 

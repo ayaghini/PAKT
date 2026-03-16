@@ -85,36 +85,26 @@ You are now connected and bonded.
 
 ---
 
-## Step 5 — Configure your callsign
+## Step 5 - Configure your callsign
 
 Press `3` (Write config) and enter your configuration as JSON:
 
 ```json
 {
   "callsign": "W1AW",
-  "ssid": 9,
-  "beacon_interval_s": 300,
-  "symbol_table": "/",
-  "symbol_code": ">",
-  "comment": "Pocket TNC"
+  "ssid": 9
 }
 ```
 
 The app will show a diff of any changes vs. the cached config, then write to the device.
-The device stores the config in NVS flash (survives reboot).
+The device stores config in NVS flash (survives reboot).
 
 **Field meanings:**
 
 | Key | Description | Example |
 |---|---|---|
 | `callsign` | Your amateur callsign (no SSID) | `"W1AW"` |
-| `ssid` | APRS SSID (0–15); 9 = portable | `9` |
-| `beacon_interval_s` | Auto-beacon interval in seconds; 0 = off | `300` |
-| `symbol_table` | APRS symbol table char (`/` = primary, `\` = alternate) | `"/"` |
-| `symbol_code` | APRS symbol code char | `">"` (car) |
-| `comment` | Free-text beacon comment (≤ 43 chars) | `"Pocket TNC"` |
-
----
+| `ssid` | APRS SSID (0-15); 9 = portable | `9` |
 
 ## Step 6 — Read device info and status
 
@@ -130,21 +120,19 @@ Press `T` at any time to see the latest telemetry snapshot without waiting for a
 
 ---
 
-## Step 7 — Send a test message
+## Step 7 - Send a test message
 
 Press `7` (Send TX request) and enter:
 
 ```json
-{"to": "CQ", "text": "Hello from PAKT", "msg_id": "01"}
+{"dest":"APRS","text":"Hello from PAKT","ssid":0}
 ```
 
-The device will attempt to transmit the APRS message.
-Watch for `tx_result` notifications — the device sends one for each transmission attempt
-and a final `acked` or `timeout` result.
+`msg_id` is assigned by firmware and returned via `tx_result` notifications.
+Watch for `tx_result` notifications - the device sends one for each transmission attempt
+and a final terminal result (`acked`, `timeout`, `cancelled`, or `error`).
 
 Press `9` to view the message queue with per-message state and attempt count.
-
----
 
 ## Step 8 — Export logs and diagnostics
 
@@ -183,3 +171,4 @@ next startup so you always know the last-known device state.
 | No notifications arriving | Press `8` to subscribe; check that `SUBSCRIBE` lines appeared after connect |
 | Config lost after reboot | Ensure write completed with no AUTH_ERR; check NVS flash is not erased |
 | TX request stays in `pending` | Verify callsign is set; check radio state in `device_status` notify |
+

@@ -1,0 +1,50 @@
+# Build artefacts
+build/
+dist/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.bin
+*.elf
+*.map
+
+# ESP-IDF managed components and build cache
+managed_components/
+sdkconfig
+sdkconfig.old
+dependencies.lock
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+.venv/
+venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Secrets / local overrides
+*.env
+.env.*
+secrets.*

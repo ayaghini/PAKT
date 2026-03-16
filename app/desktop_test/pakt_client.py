@@ -186,8 +186,9 @@ class PaktClient:
     async def send_tx_request(self, json_str: str) -> int:
         """Write TX Request (chunked, with response).
 
-        Parses 'to' and 'text' fields from json_str to register the message
-        with MessageTracker.  Returns the opaque client_id for cancellation.
+        Parses 'dest' and 'text' fields from json_str to register the message
+        with MessageTracker. Legacy payloads using 'to' are accepted as a
+        compatibility fallback. Returns the opaque client_id for cancellation.
         Raises RuntimeError if not connected or json_str is invalid JSON.
         """
         import json as _json
@@ -196,7 +197,7 @@ class PaktClient:
         except _json.JSONDecodeError as exc:
             raise RuntimeError(f"Invalid TX request JSON: {exc}") from exc
 
-        dest = str(data.get("to", ""))
+        dest = str(data.get("dest", data.get("to", "")))
         text = str(data.get("text", ""))
 
         await self._write_chunked(UUID_TX_REQUEST, "tx_request",

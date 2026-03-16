@@ -138,11 +138,11 @@ bool NmeaParser::parse_rmc(const char *fields[], size_t count)
     uint8_t h = 0, m = 0, s = 0;
     if (!parse_time(time_str, h, m, s)) return false;
 
-    fix_.lat        = nmea_to_deg(lat_str, ns && ns[0] ? ns[0] : 'N');
-    fix_.lon        = nmea_to_deg(lon_str, ew && ew[0] ? ew[0] : 'E');
-    fix_.speed_mps  = static_cast<float>(atof(speed_str) * 0.5144f);  // knots → m/s
+    fix_.lat_deg    = nmea_to_deg(lat_str, ns && ns[0] ? ns[0] : 'N');
+    fix_.lon_deg    = nmea_to_deg(lon_str, ew && ew[0] ? ew[0] : 'E');
+    fix_.speed_kmh  = static_cast<float>(atof(speed_str) * 1.852);   // knots → km/h
     fix_.course_deg = static_cast<float>(atof(course_str));
-    fix_.ts         = make_timestamp(rmc_year_, rmc_month_, rmc_day_, h, m, s);
+    fix_.timestamp_s = static_cast<uint32_t>(make_timestamp(rmc_year_, rmc_month_, rmc_day_, h, m, s));
 
     valid_ = true;
     return true;
@@ -173,14 +173,14 @@ bool NmeaParser::parse_gga(const char *fields[], size_t count)
     uint8_t h = 0, m = 0, s = 0;
     parse_time(time_str, h, m, s);
 
-    fix_.lat    = nmea_to_deg(lat_str, ns && ns[0] ? ns[0] : 'N');
-    fix_.lon    = nmea_to_deg(lon_str, ew && ew[0] ? ew[0] : 'E');
-    fix_.fix    = static_cast<uint8_t>(fq > 2 ? 2 : fq);
-    fix_.sats   = static_cast<uint8_t>(atoi(sats_str));
-    fix_.alt_m  = static_cast<float>(atof(alt_str));
+    fix_.lat_deg     = nmea_to_deg(lat_str, ns && ns[0] ? ns[0] : 'N');
+    fix_.lon_deg     = nmea_to_deg(lon_str, ew && ew[0] ? ew[0] : 'E');
+    fix_.fix_quality = static_cast<uint8_t>(fq > 2 ? 2 : fq);
+    fix_.sats_used   = static_cast<uint8_t>(atoi(sats_str));
+    fix_.alt_m       = static_cast<float>(atof(alt_str));
 
     if (rmc_year_ > 0) {
-        fix_.ts = make_timestamp(rmc_year_, rmc_month_, rmc_day_, h, m, s);
+        fix_.timestamp_s = static_cast<uint32_t>(make_timestamp(rmc_year_, rmc_month_, rmc_day_, h, m, s));
     }
 
     valid_ = (fq > 0);

@@ -1,8 +1,8 @@
 # APRS 2m Pocket TNC + Tracker (SA818 + ESP32-S3 + GPS) - MVP Docs
 
-Date: 2026-02-27
+Last updated: 2026-03-15
 
-This folder contains the starter documentation set for a standalone APRS
+This folder contains the working documentation set for a standalone APRS
 (1200 baud AFSK, AX.25) 2m device that exposes BLE interfaces to desktop and phone clients.
 
 ## Goal (MVP)
@@ -35,7 +35,7 @@ A pocket device that:
 ## Agent-first entrypoint
 Start with:
 1. `agent_bootstrap/README.md`
-2. `agent_bootstrap/agent_context.yaml`
+2. `agent_bootstrap/implementation_steps_mvp.md`
 3. Remaining files in the strict bootstrap load order
 
 The bootstrap pack includes:
@@ -44,6 +44,13 @@ The bootstrap pack includes:
 - QA gate criteria and failure handling
 - step-to-source mapping for minimal-context document loading
 - connected-device upload/debug/verify loop (`agent_bootstrap/device_loop.md`)
+- rolling implementation log (`agent_bootstrap/audit.md`)
+- gate status summary (`agent_bootstrap/gate_pass_matrix.md`)
+
+## Current implementation snapshot
+- Software: core firmware/app components are implemented and host-tested.
+- Contracts: `payload_contracts.md` is the canonical JSON schema source for BLE payloads.
+- Hardware: bench bring-up and RF/electrical validation remain gating steps.
 
 ## Current hardware baseline
 - Audio codec: `SGTL5000` (with explicit `I2S_MCLK`)
@@ -55,14 +62,3 @@ The bootstrap pack includes:
 - A practical starting point for hardware + firmware implementation
 - Enough structure to start implementation tasks
 - Not a complete electrical schematic or PCB layout yet
-
-## Suggested next steps
-1. Confirm target region defaults and APRS path presets.
-2. Complete SGTL5000 + SA818 audio level calibration values for TX/RX.
-3. Build/validate the devkit prototype path with Feather-aligned power telemetry (`MAX17048`).
-4. Implement BLE GATT services and Windows desktop test app flows first:
-   - set callsign/SSID, beacon interval, symbol, comment
-   - show RX packets, status, and telemetry
-   - send TX request and capture TX result
-5. Add phone app UX flows after desktop harness is stable.
-6. Complete TX beacon + RX decode loop, then message ACK/retry.
