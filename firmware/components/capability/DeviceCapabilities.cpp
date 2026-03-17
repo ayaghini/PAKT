@@ -22,6 +22,7 @@ static constexpr FeatureEntry kFeatureNames[] = {
     { Feature::CONFIG_RW,    "config_rw"     },
     { Feature::GPS_ONBOARD,  "gps_onboard"   },
     { Feature::HF_AUDIO,     "hf_audio"      },
+    { Feature::KISS_BLE,     "kiss_ble"      },
 };
 
 static constexpr size_t kFeatureCount =

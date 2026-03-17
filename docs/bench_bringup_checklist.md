@@ -117,12 +117,17 @@ Record: SA818 UART response string, PTT voltage on assert/de-assert, V_RADIO und
 **Goal:** confirm MCLK is present and I2S clocks are stable.
 
 1. [ ] With SGTL5000 and Feather connected, power on
-2. [ ] Probe I2S_MCLK (GPIO4) with oscilloscope → expect 12.288 MHz (typical for 48 kHz audio)
-3. [ ] Probe I2S_BCLK (GPIO5) → expect 3.072 MHz (64 × fs)
-4. [ ] Probe I2S_WS (GPIO6) → expect 48 kHz square wave
+2. [ ] Probe I2S_MCLK (GPIO4) with oscilloscope → expect 8.192 MHz
+3. [ ] Probe I2S_BCLK (GPIO5) → expect 256 kHz
+4. [ ] Probe I2S_WS (GPIO6) → expect 8 kHz square wave
 5. [ ] Monitor for I2S underrun/overrun counters in serial log (should be 0 at idle)
 
-Record: MCLK frequency, BCLK frequency, WS frequency.
+Clock plan:
+- ESP32-S3 I2S master uses `I2S_MCLK_MULTIPLE_1024` at 8 kHz → `8.192 MHz` MCLK
+- SGTL5000 expects `SYS_FS = 32 kHz`, `RATE_MODE = ÷4` → effective `8 kHz` ADC/DAC
+- Expected ratio: `MCLK / BCLK = 32`
+
+Record: MCLK frequency, BCLK frequency, WS frequency, and whether the measured values are stable across reconnect/reset.
 
 ---
 

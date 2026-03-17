@@ -78,9 +78,12 @@ AfskDemodulator::AfskDemodulator(uint32_t sample_rate_hz, FrameCallback frame_cb
     , bit_pos_(0)
     , frame_len_(0)
 {
-    // Q = 3.5 gives ~340 Hz bandwidth at 1200 Hz and ~630 Hz at 2200 Hz —
-    // enough to separate the two Bell 202 tones with good rejection.
-    static constexpr float kQ = 3.5f;
+    // Q = 1.5 balances tone separation against group delay.
+    // Q = 3.5 gives ~7.4 sample group delay at 1200 Hz (> one symbol period at
+    // 8 kHz / 1200 baud = 6.67 samples), which causes the transition-tracking
+    // synchroniser to sample adjacent symbols. Q = 1.5 gives ~3.2 samples
+    // (< 0.5 symbol), keeping the decision signal well within the eye opening.
+    static constexpr float kQ = 1.5f;
     mark_bp_  = Biquad::bandpass(1200.0f, kQ, static_cast<float>(sample_rate_hz));
     space_bp_ = Biquad::bandpass(2200.0f, kQ, static_cast<float>(sample_rate_hz));
 
@@ -98,7 +101,7 @@ void AfskDemodulator::reset()
     space_env_ = {};
 
     // Recalculate filter coefficients after zeroing structs
-    static constexpr float kQ = 3.5f;
+    static constexpr float kQ = 1.5f;
     mark_bp_  = Biquad::bandpass(1200.0f, kQ, static_cast<float>(sample_rate_));
     space_bp_ = Biquad::bandpass(2200.0f, kQ, static_cast<float>(sample_rate_));
     mark_env_ = EnvDetect::make(600.0f,  static_cast<float>(sample_rate_));
@@ -185,8 +188,12 @@ void AfskDemodulator::process_bit(bool bit)
     // Bit stuffing: after 5 consecutive 1s in the data stream, the transmitter
     // inserts a 0. We discard that 0 and reset the ones counter.
     if (bit) {
-        if (++ones_count_ >= 6) {
-            // Abort: 6+ consecutive 1s is not a valid data sequence
+        if (++ones_count_ >= 7) {
+            // Abort: 7+ consecutive 1s is a genuine abort sequence.
+            // Note: the HDLC flag 0x7E contains exactly SIX consecutive 1s
+            // (0b01111110, sent LSB-first as 0,1,1,1,1,1,1,0). Aborting at
+            // >= 6 would destroy the frame before the final 0-bit can complete
+            // the 0x7E pattern in the shift register. Abort only at >= 7.
             in_frame_   = false;
             frame_len_  = 0;
             return;

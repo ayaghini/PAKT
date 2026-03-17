@@ -31,9 +31,10 @@ class Feature:
     CONFIG_RW    = "config_rw"
     GPS_ONBOARD  = "gps_onboard"
     HF_AUDIO     = "hf_audio"
+    KISS_BLE     = "kiss_ble"    # KISS TNC over BLE (INT-003, MVP-required)
 
-    # All features expected from an MVP device
-    MVP_REQUIRED = frozenset([APRS_2M, BLE_CHUNKING, TELEMETRY, MSG_ACK, CONFIG_RW])
+    # All features expected from an MVP device (INT-003: kiss_ble is MVP-required)
+    MVP_REQUIRED = frozenset([APRS_2M, BLE_CHUNKING, TELEMETRY, MSG_ACK, CONFIG_RW, KISS_BLE])
 
 
 # ── Parsed capability record ──────────────────────────────────────────────────

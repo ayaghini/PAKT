@@ -19,6 +19,8 @@ Per-step reference docs (consult `step_source_map.md` to know which to open for 
 - `../docs/06_firmware_architecture.md`
 - `../docs/08_test_plan.md`
 - `../docs/12_implementation_backlog.md`
+- `../docs/16_kiss_over_ble_spec.md`
+- `../docs/17_mvp_gap_analysis.md`
 - `step_source_map.md` (maps each step to its minimum required docs)
 
 Rules:
@@ -26,6 +28,10 @@ Rules:
 - Never skip `qa_gates.md` before closing a step.
 - Keep protocol backward compatible unless explicitly approved.
 - Implement desktop BLE test app workflow before phone app UX workflow.
+- Firmware builds must be run through ESP-IDF using `idf.py`; do not use raw CMake directly for the firmware target.
+- Raw CMake is used only for pure-software host tests under `firmware/test_host`.
+- Treat `audit.md` as the rolling truth for recent implementation passes and `gate_pass_matrix.md` as the concise status summary.
+- When those files disagree with older step prose, prefer the newer pass log and then update the stale prose.
 
 ## What this pack must provide
 - Clear defaults so agents do not invent radio/BLE behavior.
@@ -56,4 +62,3 @@ Escalate (do not guess) when:
 - SA818 electrical behavior differs from assumptions.
 - BLE security requirements conflict with compatibility.
 - Gate failures are intermittent and not reproducible.
-

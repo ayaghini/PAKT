@@ -316,3 +316,112 @@ TEST_CASE("AprsTaskContext: ack for wrong msg_id does not disturb active message
     CHECK(events.size() == 1);
     CHECK(events[0].second == TxResultEvent::TX);
 }
+
+// ── AprsTaskContext: KISS raw TX ring ─────────────────────────────────────────
+
+TEST_CASE("AprsTaskContext: push_kiss_ax25 null data rejected") {
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    CHECK(!ctx.push_kiss_ax25(nullptr, 10));
+}
+
+TEST_CASE("AprsTaskContext: push_kiss_ax25 zero length rejected") {
+    const uint8_t data[4] = {0xC0, 0x00, 0xAA, 0xC0};
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    CHECK(!ctx.push_kiss_ax25(data, 0));
+}
+
+TEST_CASE("AprsTaskContext: push_kiss_ax25 oversize rejected") {
+    // kKissMaxAx25 = 330; 331 bytes must be rejected
+    std::vector<uint8_t> big(331, 0xAA);
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    CHECK(!ctx.push_kiss_ax25(big.data(), big.size()));
+}
+
+TEST_CASE("AprsTaskContext: push_kiss_ax25 max-size accepted") {
+    std::vector<uint8_t> frame(330, 0xBB);
+    int tx_count = 0;
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    ctx.set_raw_tx_fn([&](const uint8_t *, size_t) -> bool { ++tx_count; return true; });
+    CHECK(ctx.push_kiss_ax25(frame.data(), 330));
+    ctx.tick(0);
+    CHECK(tx_count == 1);
+}
+
+TEST_CASE("AprsTaskContext: push_kiss_ax25 enqueued and drained by tick") {
+    std::vector<std::vector<uint8_t>> received;
+
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    ctx.set_raw_tx_fn([&](const uint8_t *data, size_t len) -> bool {
+        received.emplace_back(data, data + len);
+        return true;
+    });
+
+    const uint8_t frame[] = {0xC0, 0x00, 0x01, 0x02, 0x03, 0xC0};
+    CHECK(ctx.push_kiss_ax25(frame, sizeof(frame)));
+    CHECK(received.empty());  // not consumed until tick
+
+    ctx.tick(0);
+    REQUIRE(received.size() == 1);
+    CHECK(received[0] == std::vector<uint8_t>(frame, frame + sizeof(frame)));
+}
+
+TEST_CASE("AprsTaskContext: multiple KISS frames drained in FIFO order") {
+    std::vector<size_t> rx_lens;
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    ctx.set_raw_tx_fn([&](const uint8_t *, size_t len) -> bool {
+        rx_lens.push_back(len);
+        return true;
+    });
+
+    uint8_t f1[3] = {0x01, 0x02, 0x03};
+    uint8_t f2[5] = {0x04, 0x05, 0x06, 0x07, 0x08};
+    CHECK(ctx.push_kiss_ax25(f1, 3));
+    CHECK(ctx.push_kiss_ax25(f2, 5));
+    ctx.tick(0);
+
+    REQUIRE(rx_lens.size() == 2);
+    CHECK(rx_lens[0] == 3);
+    CHECK(rx_lens[1] == 5);
+}
+
+TEST_CASE("AprsTaskContext: push_kiss_ax25 ring full returns false") {
+    // kKissRingDepth = 4; 5th push must fail without a tick in between.
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    // No raw_tx_fn set so frames accumulate in the ring.
+    uint8_t frame[4] = {0xC0, 0x00, 0xAA, 0xC0};
+    for (int i = 0; i < 4; ++i) {
+        CHECK(ctx.push_kiss_ax25(frame, sizeof(frame)));
+    }
+    CHECK(!ctx.push_kiss_ax25(frame, sizeof(frame)));  // ring is full
+}
+
+TEST_CASE("AprsTaskContext: KISS TX and APRS TX coexist — tick drains both rings") {
+    int kiss_tx_count = 0;
+
+    AprsTaskContext ctx(
+        [](const TxMessage &) -> bool { return true; }  // APRS TX always succeeds
+    );
+    ctx.set_raw_tx_fn([&](const uint8_t *, size_t) -> bool {
+        ++kiss_tx_count;
+        return true;
+    });
+
+    // Enqueue one APRS TX request and one raw KISS frame.
+    ctx.push_tx_request(make_req("APRS", "Hello"));
+    uint8_t kf[] = {0xC0, 0x00, 0x42, 0xC0};
+    CHECK(ctx.push_kiss_ax25(kf, sizeof(kf)));
+
+    ctx.tick(0);
+
+    // KISS frame must have been consumed regardless of APRS scheduler state.
+    CHECK(kiss_tx_count == 1);
+}
+
+TEST_CASE("AprsTaskContext: no raw_tx_fn set — KISS frames silently discarded") {
+    // Verify there is no crash when raw_tx_fn_ is null and frames are pushed.
+    AprsTaskContext ctx([](const TxMessage &) -> bool { return true; });
+    // raw_tx_fn_ not set (nullptr default)
+    uint8_t frame[4] = {0xC0, 0x00, 0xBB, 0xC0};
+    CHECK(ctx.push_kiss_ax25(frame, sizeof(frame)));
+    ctx.tick(0);  // must not crash
+}

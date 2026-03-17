@@ -83,3 +83,9 @@ All parts below are stereo ADC+DAC codecs; mono operation is supported by using 
 - Provide "RX CAL" mode:
   - measure noise floor and auto-set gain
 - Expose `mic_gain` and `rx_gain` in BLE config.
+
+## Current firmware clock plan
+- The current firmware targets an `8 kHz` audio path for both modem RX and TX.
+- ESP32-S3 I2S runs as master and provides `MCLK = 8.192 MHz` using `I2S_MCLK_MULTIPLE_1024` at `8 kHz`.
+- SGTL5000 is configured for `SYS_FS = 32 kHz` with `RATE_MODE = ÷4`, yielding effective `8 kHz` ADC/DAC operation.
+- Bench bring-up must verify `MCLK`, `BCLK`, and `WS` on hardware before treating the audio path as validated.

@@ -57,6 +57,8 @@ Use this map to open the minimum additional documents for each step.
 
 ## Step 10
 - `../docs/05_ble_gatt_spec.md`
+- `../docs/16_kiss_over_ble_spec.md`
+- `../docs/17_mvp_gap_analysis.md`
 - `../docs/12_implementation_backlog.md`
 
 ## Step 11

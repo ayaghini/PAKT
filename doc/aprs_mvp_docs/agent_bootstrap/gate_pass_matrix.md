@@ -1,6 +1,6 @@
 # MVP Gate Pass Matrix
 
-Generated: 2026-03-09
+Generated: 2026-03-16
 Agent step: Step 9 (QA-003, QA-004, QA-006, DOC-001, DOC-003)
 
 Legend:
@@ -16,12 +16,12 @@ Legend:
 | Check | Status | Notes |
 |---|---|---|
 | Firmware builds in CI | **pass** | `firmware-build` CI job: ESP-IDF v5.3.2, target esp32s3, `idf.py build` |
-| Host unit tests pass in CI | **pass** | `host-tests` CI job: CMake+Ninja, 200+ tests across ax25/aprs/modem/ble_chunker/tx_scheduler/telemetry/gps/payload_validator/tx_integration/ptt_watchdog/config_store |
+| Host unit tests pass in CI | **pass** | `host-tests` CI job: CMake+Ninja, 364/364 tests pass. AFSK round-trip fixed (pass 3): ones_count 6→7, biquad Q 3.5→1.5. TX buffer sizing tests added (pass 4–5): 6 new tests; `modulate_frame()` truncation signaling corrected (pass 5): inline before-write check correctly distinguishes truncation from exact-fit success. |
 | Python app tests pass in CI | **pass** | `app-tests` CI job: pytest, test_chunker + test_app + test_messaging + test_telemetry_app |
 | No new critical warnings in touched modules | **pass** | `-Wall -Wextra -Wpedantic` in host tests; ESP-IDF build clean |
 | Firmware flashes and boots on target | **blocked** | Dependency: prototype hardware (ESP32-S3 board) not yet available |
 
-**G0 assessment:** Software checks pass. Hardware flash/boot check blocked pending prototype.
+**G0 assessment:** All software checks pass. Host test binary status recorded here is 364/364 after the pass 5 `AfskModulator` truncation fix. Hardware flash/boot check remains blocked pending prototype.
 
 ---
 
@@ -31,8 +31,9 @@ Legend:
 |---|---|---|
 | Beacon TX decodes on known-good receiver | **blocked** | Requires SA818 + antenna + reference TNC. Dependency: HW-010 (EVT build) |
 | SGTL5000 SYS_MCLK + sample-rate stable across reconnect | **blocked** | Requires SGTL5000 codec on hardware. Dependency: FW-004 (I2S driver, Step 2) |
-| RX decode stream reaches app | **blocked** | Requires hardware RX path. Dependency: FW-006, FW-004 |
+| RX decode stream reaches app | **partial** | `audio_task` now wired: SGTL5000 I2C init + I2S RX channel + `AfskDemodulator` instantiated; decoded frames pushed to `g_rx_ax25_queue`; `aprs_task` already drains queue and forwards to BLE notify + KISS RX. Software path complete. Runtime blocked until SGTL5000 hardware present. Dependency: HW-010. |
 | Message send/ack/timeout states correct | **partial** | TxScheduler FSM + MessageTracker fully tested in software (26+37 tests). End-to-end ack flow requires hardware. |
+| KISS-over-BLE exchanges frames with reference client | **partial** | KISS software stack complete end-to-end (2026-03-16 pass 2–4): KissFramer (37 host tests), KISS GATT service in BleServer, KISS TX decoded+enqueued into AprsTaskContext raw-AX.25 ring (35 host tests), KISS RX drain loop wired in aprs_task (notifies both native rx_packet and KISS RX clients), notify_kiss_rx sends proper INT-002 chunks, desktop kiss_bridge.py reassembles multi-chunk KISS RX frames (50 Python tests). Real AFSK TX path now wired (pass 4): RadioTxFn and RawTxFn stubs replaced with `afsk_tx_frame()` (Sa818Radio.ptt + AfskModulator + I2S write + PTT release). Hardware-gated: real audio RX pipeline (Ax25RxQueue producer blocked until SGTL5000 hardware present), third-party client validation (APRSdroid/Direwolf/YAAC). Dependency: HW-010 |
 | Controlled-condition beacon decode ≥ 95% | **blocked** | Requires hardware RX pipeline and corpus test rig. Dependency: FW-006, FW-004, HW-010 |
 
 **G1 assessment:** All functional checks blocked pending hardware. Software foundations (modem, AX.25, APRS, BLE, TX FSM) fully implemented and unit-tested.
@@ -47,6 +48,7 @@ Legend:
 | 1 hour continuous RX BLE session stable | **blocked** | Requires hardware. Dependency: QA-004 (BLE endurance matrix) |
 | Reconnect works after link drop and device reboot | **partial** | BleTransport reconnect FSM implemented (RECONNECTING→CONNECTED/ERROR with on_reconnected callback, re-subscription). Validated in test_app.py mocks. Real link drop testing blocked pending hardware. |
 | Chunk reassembly handles loss/duplicates/timeouts | **pass** | BleChunker (C++) and chunker.py (Python) both handle duplicate chunks, LRU slot eviction, and timeouts. 18 C++ + 25 Python tests pass. |
+| Native BLE and KISS-over-BLE coexist | **partial** | KISS service added alongside existing APRS/Telemetry services in gatt_svcs[]; disconnect resets all chunkers including kiss_tx. Coexistence verified in code; hardware BLE endurance test still blocked. Dependency: HW-010 |
 
 **G2 assessment:** Chunker robustness and transport FSM fully tested in software. Hardware endurance runs blocked.
 
@@ -100,7 +102,7 @@ The CI pipeline constitutes the regression suite for firmware releases:
 | SA818 audio deviation calibration (TX deviation) | High | Identified as top risk; needs bench measurement with reference calibrated TNC | RF / Step 1 hardware |
 | BleServer encrypted+bonded write rejection (G3 hardware) | High | Firmware implementation complete; P0 priority for first hardware bring-up session | Firmware / Step 4 hardware |
 | PTT stuck-on under BLE fault or task crash | High | FW-016 software-complete: PttWatchdog + PttController + watchdog_task wired (21 host tests). Sa818Radio (FW-003) software-complete: 18 host tests; radio_task registers direct-GPIO watchdog callback before init then upgrades to radio.ptt(false) after init. Hardware fault injection test remains blocked. | Firmware / G3 hardware bring-up |
-| TxScheduler wired into APRS task (radio TX stub) | Low | TxScheduler IS integrated via AprsTaskContext in aprs_task (ctx.tick()), 26 host tests pass. RadioTxFn is a stub (returns true without real AX.25/AFSK TX). Real TX path wired when SA818+audio drivers are ready. | Firmware / Step 7 hardware |
+| TxScheduler wired into APRS task (radio TX stub) | Low | TxScheduler IS integrated via AprsTaskContext in aprs_task (ctx.tick()), 26 host tests pass. RadioTxFn and RawTxFn stubs replaced (pass 4) with real `afsk_tx_frame()` (Sa818Radio.ptt + AfskModulator + I2S write). Runtime blocked until SA818+SGTL5000 hardware present. | Firmware / Step 7 hardware |
 | TX result notify wire format not confirmed against firmware | Medium | Python MessageTracker parses `{"msg_id":"...","status":"..."}` — must verify against actual BleServer notify on hardware | Firmware+App / Step 7 hardware |
 | GPS parser (FW-005) software done; UART integration blocked | Medium | NmeaParser implemented (GPRMC/GPGGA, checksum, Unix timestamp, stale-fix); 37 host tests pass. gps_task UART stub must be replaced with real driver on hardware before GPS fields are live. | Firmware / Step 4b hardware bring-up |
 
@@ -108,9 +110,11 @@ The CI pipeline constitutes the regression suite for firmware releases:
 
 ## Summary
 
-**Software-complete:** Steps 0, 1(FW-016 + FW-003 SA818 driver software), 3, 4, 4b, 5, 6, 7, 8, 10 (all software portions)
-**Hardware-blocked:** Steps 1(SA818 electrical validation), 2 (audio pipeline), full end-to-end validation of Steps 3–8, G1, G2(endurance), G3(hardware), G4
-**MVP milestone gate:** OPEN — G0(software) passes; G0(hardware), G1, G3, G4 blocked pending EVT prototype
+**Software-complete:** Steps 0, 1(FW-016 + FW-003 SA818 driver software), 2 (audio pipeline wired: SGTL5000 + I2S full-duplex + AfskDemodulator → Ax25RxQueue; clocking fixed pass 4), 3, 4, 4b, 5, 6, 7, 8, 10 (all software portions)
+**AFSK modem fixed:** 364/364 host tests pass (2026-03-16 pass 5). Demodulator bugs fixed (pass 3). TX buffer sizing tests added (pass 4–5). `AfskModulator::modulate_frame()` truncation signaling corrected (pass 5): inline before-write check, exact-fit success confirmed possible and handled correctly.
+**TX path wired (pass 4):** `afsk_tx_frame()` implemented in main.cpp — Sa818Radio.ptt + AfskModulator + I2S write. RadioTxFn and RawTxFn stubs replaced. SGTL5000/I2S clocking mismatch fixed (MCLK 2.048 MHz → 8.192 MHz). MUTE_LO cleared. I2S_IN→DAC routing fixed.
+**Hardware-blocked:** Steps 1(SA818 electrical validation), 2(SGTL5000 MCLK measurement + ADC gain calibration), full end-to-end validation of Steps 3–8, G1, G2(endurance), G3(hardware), G4; third-party KISS client validation
+**MVP milestone gate:** OPEN — G0(software) passes; G0(hardware), G1, G2(KISS coexistence hardware), G3, G4 blocked pending EVT prototype
 
 **Next unblocking action:** Prototype hardware bring-up (HW-010). Priority order for first bring-up session:
 1. Flash/boot check (G0)
@@ -118,3 +122,5 @@ The CI pipeline constitutes the regression suite for firmware releases:
 3. PTT safe-off fault test (G3 critical path)
 4. SA818 UART and PTT validation (Step 1 / FW-003)
 5. SGTL5000 I2S MCLK stability (Step 2 / FW-004)
+6. KISS TX write + decode validation (connect with kiss_bridge.py, send a frame, check firmware log)
+7. KISS RX notify validation (verify `kiss_bridge.py` receives frames from the live modem decode path)

@@ -35,6 +35,7 @@ static const char *TAG = "ble_server";
 
 static const ble_uuid128_t uuid_aprs_svc     = UUID128(pakt::uuids::kAprsService);
 static const ble_uuid128_t uuid_telm_svc     = UUID128(pakt::uuids::kTelemetryService);
+static const ble_uuid128_t uuid_kiss_svc     = UUID128(pakt::uuids::kKissService);
 static const ble_uuid128_t uuid_dev_config   = UUID128(pakt::uuids::kDeviceConfig);
 static const ble_uuid128_t uuid_dev_command  = UUID128(pakt::uuids::kDeviceCommand);
 static const ble_uuid128_t uuid_dev_status   = UUID128(pakt::uuids::kDeviceStatus);
@@ -45,6 +46,8 @@ static const ble_uuid128_t uuid_tx_result    = UUID128(pakt::uuids::kTxResult);
 static const ble_uuid128_t uuid_gps_telem    = UUID128(pakt::uuids::kGpsTelemetry);
 static const ble_uuid128_t uuid_power_telem  = UUID128(pakt::uuids::kPowerTelemetry);
 static const ble_uuid128_t uuid_system_telem = UUID128(pakt::uuids::kSystemTelemetry);
+static const ble_uuid128_t uuid_kiss_rx      = UUID128(pakt::uuids::kKissRx);
+static const ble_uuid128_t uuid_kiss_tx      = UUID128(pakt::uuids::kKissTx);
 
 // ── GATT access callback declarations ────────────────────────────────────────
 
@@ -53,6 +56,8 @@ static int aprs_access_cb(uint16_t conn_h, uint16_t attr_h,
 static int dis_access_cb (uint16_t conn_h, uint16_t attr_h,
                            struct ble_gatt_access_ctxt *ctxt, void *arg);
 static int telm_access_cb(uint16_t conn_h, uint16_t attr_h,
+                           struct ble_gatt_access_ctxt *ctxt, void *arg);
+static int kiss_access_cb(uint16_t conn_h, uint16_t attr_h,
                            struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 // ── Value handle storage ──────────────────────────────────────────────────────
@@ -68,6 +73,8 @@ static uint16_t g_h_tx_result    = 0;
 static uint16_t g_h_gps_telem    = 0;
 static uint16_t g_h_power_telem  = 0;
 static uint16_t g_h_system_telem = 0;
+static uint16_t g_h_kiss_rx      = 0;
+static uint16_t g_h_kiss_tx      = 0;
 
 // ── GATT service table ────────────────────────────────────────────────────────
 
@@ -159,6 +166,25 @@ static const struct ble_gatt_chr_def dis_chars[] = {
     { 0 }
 };
 
+// KISS Service characteristics (INT-003)
+// KISS RX: notify only (no security restriction — same as other notify characteristics)
+// KISS TX: write with response, encrypted + bonded (frozen in spec §7.1)
+static const struct ble_gatt_chr_def kiss_chars[] = {
+    {
+        .uuid       = &uuid_kiss_rx.u,
+        .access_cb  = kiss_access_cb,
+        .val_handle = &g_h_kiss_rx,
+        .flags      = BLE_GATT_CHR_F_NOTIFY,
+    },
+    {
+        .uuid       = &uuid_kiss_tx.u,
+        .access_cb  = kiss_access_cb,
+        .val_handle = &g_h_kiss_tx,
+        .flags      = BLE_GATT_CHR_F_WRITE,
+    },
+    { 0 } // terminator
+};
+
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     { // Device Information Service
         .type            = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -175,6 +201,11 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
         .uuid            = &uuid_telm_svc.u,
         .characteristics = telm_chars,
     },
+    { // KISS Service (INT-003)
+        .type            = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid            = &uuid_kiss_svc.u,
+        .characteristics = kiss_chars,
+    },
     { 0 } // terminator
 };
 
@@ -183,9 +214,11 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
 // Forward declaration; callbacks defined after BleServer singleton is available.
 static void on_config_chunk_complete(const uint8_t *data, size_t len);
 static void on_tx_req_chunk_complete(const uint8_t *data, size_t len);
+static void on_kiss_tx_chunk_complete(const uint8_t *data, size_t len);
 
 static pakt::BleChunker g_config_chunker(on_config_chunk_complete);
 static pakt::BleChunker g_tx_req_chunker(on_tx_req_chunk_complete);
+static pakt::BleChunker g_kiss_tx_chunker(on_kiss_tx_chunk_complete);
 
 // ── Security helper ───────────────────────────────────────────────────────────
 
@@ -261,6 +294,7 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         srv.bonded_      = false;
         g_config_chunker.reset();
         g_tx_req_chunker.reset();
+        g_kiss_tx_chunker.reset();
         start_advertising_internal(srv.device_name_);
         break;
 
@@ -390,6 +424,53 @@ static int telm_access_cb(uint16_t /*conn_h*/, uint16_t /*attr_h*/,
     return BLE_ATT_ERR_READ_NOT_PERMITTED;
 }
 
+// ── KISS Service access callback (INT-003) ────────────────────────────────────
+//
+// KISS RX: notify-only — reads and unsolicited writes are rejected.
+// KISS TX: write with response, requires encrypted + bonded link.
+//          Frame is reassembled via BleChunker; on_kiss_tx is called on completion.
+
+static int kiss_access_cb(uint16_t conn_h, uint16_t /*attr_h*/,
+                           struct ble_gatt_access_ctxt *ctxt, void * /*arg*/)
+{
+    pakt::BleServer &srv = pakt::BleServer::instance();
+
+    // Reads on either KISS characteristic are not supported.
+    if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) return BLE_ATT_ERR_READ_NOT_PERMITTED;
+
+    // Only writes from here on.
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+
+    // KISS TX requires an encrypted + bonded link (spec §7.1).
+    if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_kiss_tx.u) == 0) {
+        if (!conn_is_encrypted_and_bonded(conn_h)) {
+            ESP_LOGW(TAG, "KISS TX write rejected: link not encrypted+bonded");
+            return BLE_ATT_ERR_INSUFFICIENT_AUTHEN;
+        }
+
+        uint8_t buf[512];
+        uint16_t buf_len = sizeof(buf);
+        if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &buf_len) != 0) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+
+        uint32_t now_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
+        if (!g_kiss_tx_chunker.feed(buf, buf_len, now_ms)) {
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+        // Reassembled frame delivered via on_kiss_tx_chunk_complete callback.
+        return 0;
+    }
+
+    // KISS RX is notify-only; writes to it are rejected.
+    if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_kiss_rx.u) == 0) {
+        return BLE_ATT_ERR_WRITE_NOT_PERMITTED;
+    }
+
+    (void)srv;
+    return BLE_ATT_ERR_UNLIKELY;
+}
+
 // ── NimBLE host sync/reset callbacks ─────────────────────────────────────────
 
 static void on_ble_sync()
@@ -426,6 +507,16 @@ static void on_tx_req_chunk_complete(const uint8_t *data, size_t len)
     if (srv.handlers_.on_tx_request) {
         srv.handlers_.on_tx_request(data, len);
     }
+}
+
+static void on_kiss_tx_chunk_complete(const uint8_t *data, size_t len)
+{
+    pakt::BleServer &srv = pakt::BleServer::instance();
+    if (srv.handlers_.on_kiss_tx) {
+        srv.handlers_.on_kiss_tx(data, len);
+    }
+    // If no handler registered, the KISS frame is silently dropped.
+    // (KISS is a raw pipe — no KISS-level ACK is sent back to the client.)
 }
 
 // ── BleServer public interface ────────────────────────────────────────────────
@@ -483,6 +574,8 @@ bool BleServer::init(const Handlers &handlers, const char *device_name)
     h_gps_telem_    = g_h_gps_telem;
     h_power_telem_  = g_h_power_telem;
     h_system_telem_ = g_h_system_telem;
+    h_kiss_rx_      = g_h_kiss_rx;
+    h_kiss_tx_      = g_h_kiss_tx;
 
     initialized_ = true;
     ESP_LOGI(TAG, "BleServer initialized");
@@ -525,6 +618,61 @@ bool BleServer::notify_tx_result(const uint8_t *d, size_t n) { return send_notif
 bool BleServer::notify_gps      (const uint8_t *d, size_t n) { return send_notify_(h_gps_telem_,   last_notify_gps_,    d, n); }
 bool BleServer::notify_power    (const uint8_t *d, size_t n) { return send_notify_(h_power_telem_, last_notify_power_,  d, n); }
 bool BleServer::notify_system   (const uint8_t *d, size_t n) { return send_notify_(h_system_telem_,last_notify_system_, d, n); }
+
+bool BleServer::notify_kiss_rx(const uint8_t *d, size_t n)
+{
+    // KISS RX uses INT-002 chunking (spec §3.2): the KISS frame is split into
+    // BLE-payload-sized chunks, each prefixed with [msg_id:1][idx:1][total:1].
+    // This matches the desktop KissBridge._on_kiss_rx_notify reassembler.
+    //
+    // Chunk payload = 17 bytes (ATT_MTU=23 − 3 ATT − 3 INT-002 header).
+    // This is the conservative minimum; higher MTU yields fewer chunks but the
+    // same chunking is valid at any MTU.
+    //
+    // Unlike the other notify_ helpers, KISS RX is NOT rate-limited per chunk:
+    // dropping mid-frame chunks breaks reassembly.  The caller (aprs_task) is
+    // responsible for pacing frame delivery.
+
+    if (!connected_ || h_kiss_rx_ == 0 || !d || n == 0) return false;
+
+    static constexpr size_t kChunkPayload = 17;   // mtu=23 − 6 bytes overhead
+
+    const size_t total_chunks = (n + kChunkPayload - 1) / kChunkPayload;
+    if (total_chunks == 0 || total_chunks > 255) return false;
+
+    const uint8_t msg_id = ++kiss_rx_msg_id_;  // rolling 1–255 (0 skipped on wrap)
+
+    bool all_sent = true;
+    for (uint8_t idx = 0; idx < static_cast<uint8_t>(total_chunks); ++idx) {
+        const size_t offset    = idx * kChunkPayload;
+        const size_t chunk_len = (offset + kChunkPayload <= n)
+                                  ? kChunkPayload : (n - offset);
+
+        // 3-byte INT-002 header + payload
+        uint8_t buf[3 + kChunkPayload];
+        buf[0] = msg_id;
+        buf[1] = idx;
+        buf[2] = static_cast<uint8_t>(total_chunks);
+        std::memcpy(buf + 3, d + offset, chunk_len);
+
+        struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, 3 + chunk_len);
+        if (!om) {
+            ESP_LOGW(TAG, "notify_kiss_rx: mbuf alloc failed (chunk %u/%zu)", idx, total_chunks);
+            all_sent = false;
+            continue;
+        }
+        int rc = ble_gatts_notify_custom(conn_handle_, h_kiss_rx_, om);
+        if (rc != 0) {
+            ESP_LOGW(TAG, "notify_kiss_rx: chunk %u/%zu failed rc=%d", idx, total_chunks, rc);
+            all_sent = false;
+        }
+    }
+
+    if (all_sent) {
+        last_notify_kiss_rx_ = esp_timer_get_time();
+    }
+    return all_sent;
+}
 
 bool BleServer::is_connected() const { return connected_; }
 bool BleServer::is_bonded()    const { return bonded_;    }

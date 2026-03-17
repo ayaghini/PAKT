@@ -128,7 +128,8 @@ TEST_SUITE("aprs::encode_message")
         // Contains message text
         CHECK(strstr(s, "Hello World") != nullptr);
         // Contains message ID with '{'
-        CHECK(strstr(s, "{001}") != nullptr || strstr(s, "{001") != nullptr);
+        const bool has_msg_id = (strstr(s, "{001}") != nullptr) || (strstr(s, "{001") != nullptr);
+        CHECK(has_msg_id);
     }
 
     TEST_CASE("destination callsign is padded to 9 chars")

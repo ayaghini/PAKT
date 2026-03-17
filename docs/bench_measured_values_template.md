@@ -73,9 +73,9 @@ Notes:
 
 | Measurement | Expected | Measured | Pass? |
 |-------------|----------|----------|-------|
-| I2S_MCLK frequency (GPIO4) | 12.288 MHz | | |
-| I2S_BCLK frequency (GPIO5) | 3.072 MHz | | |
-| I2S_WS frequency (GPIO6) | 48.000 kHz | | |
+| I2S_MCLK frequency (GPIO4) | 8.192 MHz | | |
+| I2S_BCLK frequency (GPIO5) | 256 kHz | | |
+| I2S_WS frequency (GPIO6) | 8.000 kHz | | |
 | I2S underrun count (idle) | 0 | | |
 
 Notes:

@@ -15,6 +15,7 @@ Gate scope:
 - SGTL5000 `SYS_MCLK` and sample-rate configuration remains stable across reconnect/reinit cycles.
 - RX decode stream reaches app correctly.
 - Message send/ack/timeout states correct.
+- KISS-over-BLE exchanges frames correctly with at least one reference client or bridge.
 - Controlled-condition beacon decode target: >= 95%.
 
 ## Gate G2 - BLE reliability
@@ -22,6 +23,7 @@ Gate scope:
 - 1 hour continuous RX BLE session stable.
 - Reconnect works after link drop and device reboot.
 - Chunk reassembly handles loss/duplicates/timeouts.
+- Native BLE and KISS-over-BLE can coexist without breaking each other.
 
 ## Gate G3 - Security and safety
 - Write endpoints blocked when not encrypted+bonded.

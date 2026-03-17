@@ -21,9 +21,10 @@ Evidence legend: `code + tests + gate summary + residual risks`
 
 ## Step 2 - Audio pipeline baseline (SGTL5000)
 - IDs: FW-004, QA-002
-- Status: todo
+- Status: in_progress
 - Exit: stable I2S read/write at target sample rate without sustained underrun; SGTL5000 `SYS_MCLK` validation complete
-- Evidence: sample-rate verification, underrun/overrun counters, reinit stability note
+- Evidence (software done): `audio_pipeline_run()` in `firmware/main/main.cpp` now performs SGTL5000 I2C init, full-duplex I2S channel setup, RX-side `AfskDemodulator` processing into `g_rx_ax25_queue`, and TX-side publication of `g_i2s_tx_chan` for shared `afsk_tx_frame()` use. Clocking was corrected to an 8 kHz plan using `I2S_MCLK_MULTIPLE_1024` and SGTL5000 `SYS_FS = 32 kHz, RATE_MODE = ÷4`, giving `8.192 MHz` MCLK. Runtime bring-up remains hardware-gated.
+- Residual risk: verify actual MCLK/BCLK/WS on the bench, confirm SGTL5000 lock, check underrun/overrun behavior, and calibrate ADC/DAC gain on hardware.
 
 ## Step 3 - APRS modem core
 - IDs: FW-006, FW-007, FW-008, FW-009
@@ -82,12 +83,18 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Evidence (software done): gate_pass_matrix.md — full G0–G4 assessment with pass/partial/blocked per check item and 8-item residual risk table with mitigation owners. CI regression suite (QA-006) operational: firmware-build + host-tests + app-tests on every push/PR. DOC-001: docs/13_quickstart_guide.md — 9-step first-use guide covering installation, pairing, config, TX, telemetry, and log export. DOC-003: docs/14_pairing_security_policy.md — LE SC security model, AUTH_ERR resolution procedure, bond-reset flow, multi-client notes, regulatory notes. QA-003 (RF functional test) and QA-004 (BLE endurance matrix) blocked until hardware available.
 - Residual risk: G1 (functional), G3 hardware portion (bonded-write rejection, PTT safe-off), and G4 blocked pending EVT prototype. PTT safe-off under fault (G3) is a P0 blocker for any TX-capable field use.
 
-## Step 10 - Post-MVP interop
-- IDs: INT-001, INT-003, DOC-004
+## Step 10 - MVP KISS interop
+- IDs: INT-001, INT-003, INT-004, FW-018, APP-013, DOC-004
 - Status: in_progress
-- Exit: capability negotiation + draft KISS-over-BLE interop
-- Evidence (software done): DeviceCapabilities component (components/capability/): feature bitmask, JSON serialiser, mvp_defaults(), has() API; 16 host unit tests in test_capability.cpp. kDeviceCapabilities UUID (0xA0040000) added to BleUuids.h and now wired into BleServer GATT table as a read-only characteristic (2026-03-14): BleServer::Handlers gained on_caps_read callback, aprs_chars[] gained a BLE_GATT_CHR_F_READ entry for uuid_dev_caps, aprs_access_cb handles the read and falls back to `{}` if the handler is not set, main.cpp ble_task wires on_caps_read to DeviceCapabilities::mvp_defaults().to_json(). Python capability.py: DeviceCapabilities parser (protocol, fw_ver, hw_rev, features frozenset), CapabilityNegotiator (read on connect, assumed_mvp() fallback, feature flag API, on_caps callback with CAPS_WARN for missing MVP features, reset on disconnect); 28 pytest tests in test_capability.py. pakt_client.py reads capabilities on connect, exposes capabilities property, logs CAPS/CAPS_WARN. CI app-tests updated. INT-003 draft spec: docs/16_kiss_over_ble_spec.md — KISS Service UUIDs, chunked frame transport, TX/RX paths, multi-client arbitration, capability flag, open questions. DOC-004: docs/15_interoperability_matrix.md — platform matrix for Windows/macOS/Linux/Android/iOS, KISS bridge compat table, frequency configs, known limitations, hardware validation checklist.
-- Residual risk: CapabilityNegotiator fallback to assumed_mvp() will be exercised until hardware validates the actual BLE read. KISS profile deferred to M3.
+- Exit: capability negotiation live, KISS-over-BLE implemented, and at least one reference KISS client or bridge validated
+- Evidence (software done): DeviceCapabilities component (components/capability/): feature bitmask, JSON serialiser, mvp_defaults(), has() API; 16 host unit tests in test_capability.cpp. kDeviceCapabilities UUID (0xA0040000) added to BleUuids.h and now wired into BleServer GATT table as a read-only characteristic (2026-03-14): BleServer::Handlers gained on_caps_read callback, aprs_chars[] gained a BLE_GATT_CHR_F_READ entry for uuid_dev_caps, aprs_access_cb handles the read and falls back to `{}` if the handler is not set, main.cpp ble_task wires on_caps_read to DeviceCapabilities::mvp_defaults().to_json(). Python capability.py: DeviceCapabilities parser (protocol, fw_ver, hw_rev, features frozenset), CapabilityNegotiator (read on connect, assumed_mvp() fallback, feature flag API, on_caps callback with CAPS_WARN for missing MVP features, reset on disconnect); 28 pytest tests in test_capability.py. pakt_client.py reads capabilities on connect, exposes capabilities property, logs CAPS/CAPS_WARN.
+- Evidence (software done 2026-03-16): KISS-over-BLE software path is now substantially implemented end-to-end. `KissFramer` is implemented and host-tested; KISS UUIDs and GATT service are present in `BleServer`; `handlers.on_kiss_tx` decodes inbound KISS and enqueues raw AX.25 into `AprsTaskContext`; the shared TX path uses `afsk_tx_frame()`; `aprs_task` drains decoded AX.25 frames from `g_rx_ax25_queue` and forwards them to both native `rx_packet` and KISS RX notifications; `notify_kiss_rx()` applies INT-002 chunking; desktop `kiss_bridge.py` handles multi-chunk RX reassembly. Capability negotiation exposes `kiss_ble`, and the Python side has KISS capability and bridge coverage.
+- Remaining implementation required (hardware-gated):
+  - Validate KISS TX and KISS RX with physical BLE + RF/audio hardware
+  - Validate with third-party KISS client on hardware (APRSdroid, Direwolf, YAAC, Xastir)
+  - Update DOC-004 interop matrix with real evidence
+- Primary docs: `docs/16_kiss_over_ble_spec.md`, `docs/17_mvp_gap_analysis.md`, `docs/15_interoperability_matrix.md`.
+- Residual risk: CapabilityNegotiator fallback to assumed_mvp() will be exercised until hardware validates the actual BLE read. KISS is now MVP-critical rather than deferred. Third-party client interoperability and BLE/RF behavior remain hardware-gated.
 
 ## Step 11 - HF discovery track
 - IDs: HF-001..HF-011
@@ -95,5 +102,3 @@ Evidence legend: `code + tests + gate summary + residual risks`
 - Exit: go/no-go decision record for production HF audio bridge
 - Evidence: latency/jitter/battery measurements and explicit decision rationale
 - Note: This is a discovery track that can run alongside Steps 9-10 if a second agent is available, but must not block MVP milestone closure. A single agent should complete Steps 0-10 before starting Step 11.
-
-

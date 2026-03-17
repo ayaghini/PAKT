@@ -1,8 +1,8 @@
 project:
   name: PAKT
-  objective: "Battery-powered APRS pocket TNC/tracker with BLE desktop test app + phone app; later HF-capable unified app architecture"
+  objective: "Battery-powered APRS pocket TNC/tracker with native BLE plus KISS-over-BLE, desktop test tooling, and later phone-app support"
   phase: "Implementation"
-  current_focus: "MVP APRS path (2m, SA818 + SGTL5000 + BLE)"
+  current_focus: "MVP closure via hardware bring-up (SA818 + SGTL5000 + BLE security + APRS/KISS validation)"
 
 mvp:
   radio:

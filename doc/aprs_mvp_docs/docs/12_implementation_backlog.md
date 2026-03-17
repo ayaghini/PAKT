@@ -14,7 +14,7 @@ Related docs:
 ## 1. Purpose
 This backlog is the execution plan for delivering:
 - MVP APRS 2m Pocket TNC + Tracker
-- Post-MVP interoperability features
+- MVP KISS TNC interoperability over BLE
 - HF-capable variant with unified app architecture
 
 ## 2. Backlog Conventions
@@ -37,7 +37,7 @@ This backlog is the execution plan for delivering:
 - `M0` Foundation and bench bring-up
 - `M1` MVP feature complete
 - `M2` MVP stabilization and field validation
-- `M3` Interop expansion (KISS/profile ecosystem)
+- `M3` Ecosystem expansion and broader client compatibility
 - `M4` HF variant discovery and beta
 - `M5` HF productization decision
 
@@ -257,7 +257,13 @@ This backlog is the execution plan for delivering:
 - Dependencies: FW-011
 - Done criteria: fixture can run pass/fail checks over serial or BLE.
 
-### FW-018 Firmware signing and OTA strategy (post-MVP)
+### FW-018 KISS framing and BLE service implementation
+- Priority: `P0`
+- Estimate: `L`
+- Dependencies: FW-010, FW-011, INT-001
+- Done criteria: KISS framer/parser, KISS GATT service, shared TX scheduler path, and RX frame wrapping implemented with host tests.
+
+### FW-019 Firmware signing and OTA strategy (post-MVP)
 - Priority: `P2`
 - Estimate: `L`
 - Dependencies: FW-013
@@ -343,6 +349,12 @@ This backlog is the execution plan for delivering:
 - Dependencies: APP-001
 - Done criteria: crash and performance telemetry enabled with privacy notice.
 
+### APP-013 KISS compatibility harness
+- Priority: `P0`
+- Estimate: `M`
+- Dependencies: APP-000, FW-018
+- Done criteria: desktop-side KISS test or bridge utility can validate TX/RX against the device and record compatibility evidence.
+
 ## 8. Protocol and Interoperability Stream
 
 ### INT-001 Protocol capability negotiation
@@ -357,14 +369,14 @@ This backlog is the execution plan for delivering:
 - Dependencies: FW-011, APP-002
 - Done criteria: chunk/reassembly with timeout and duplicate handling validated.
 
-### INT-003 KISS-over-BLE profile (post-MVP)
-- Priority: `P2`
+### INT-003 KISS-over-BLE profile
+- Priority: `P0`
 - Estimate: `L`
 - Dependencies: INT-001
-- Done criteria: draft spec and reference implementation tested with at least one third-party client.
+- Done criteria: spec finalized for MVP, UUIDs and security policy frozen, and reference implementation validated with at least one third-party client or bridge.
 
 ### INT-004 Third-party app compatibility adapter
-- Priority: `P2`
+- Priority: `P1`
 - Estimate: `L`
 - Dependencies: INT-003
 - Done criteria: compatibility mode tested against target external app(s).
@@ -444,6 +456,12 @@ This backlog is the execution plan for delivering:
 - Estimate: `M`
 - Dependencies: INT-003, QA-004
 - Done criteria: supported radios, phones, OS versions, and known caveats listed.
+
+### DOC-006 MVP gap analysis and implementation order
+- Priority: `P0`
+- Estimate: `S`
+- Dependencies: PM-003
+- Done criteria: current firmware/protocol gaps and implementation order published for agents and maintainers.
 
 ### DOC-005 Developer contribution guide
 - Priority: `P2`
@@ -542,7 +560,7 @@ This backlog is the execution plan for delivering:
 ### SEC-003 Release artifact integrity checks
 - Priority: `P2`
 - Estimate: `S`
-- Dependencies: FW-018
+- Dependencies: FW-019
 - Done criteria: signed build artifacts with verification in release process.
 
 ### SEC-004 Regional configuration safeguards
@@ -574,9 +592,16 @@ This backlog is the execution plan for delivering:
 - QA-003, QA-004
 - DOC-001, DOC-003
 
+### Sprint D (MVP interop closure)
+- FW-015, FW-018
+- APP-013
+- INT-001, INT-003, INT-004
+- DOC-004, DOC-006
+
 ## 14. MVP Release Gates (M1 -> M2)
 - Gate G1: Functional completeness
   - All `P0` MVP items done or explicitly waived with mitigation.
+  - Native BLE and KISS-over-BLE both function against their reference clients.
 - Gate G2: Reliability
   - BLE 1-hour continuous RX stability target met on test matrix.
   - Controlled-condition beacon decode success meets acceptance target from test plan.
@@ -588,9 +613,9 @@ This backlog is the execution plan for delivering:
 
 ## 15. Post-MVP Priority Stack
 1. `P1` stabilization and diagnostics (FW-015, APP-010, QA-007)
-2. Interoperability expansion (INT-003, INT-004, DOC-004)
+2. Broader ecosystem expansion beyond first MVP KISS target
 3. HF discovery and narrow beta (HF-001 through HF-011)
-4. OTA/signing and deeper security hardening (FW-018, SEC-003)
+4. OTA/signing and deeper security hardening (FW-019, SEC-003)
 
 ## 16. Open Planning Decisions
 - Select Windows desktop app stack for BLE test harness (for example .NET/WinUI or Electron/WebBluetooth fallback).
@@ -598,4 +623,3 @@ This backlog is the execution plan for delivering:
 - Confirm exact target phone OS versions for support matrix.
 - Confirm first three HF radios for profile certification.
 - Define objective thresholds for HF audio bridge viability (latency, jitter, drop rate, battery impact).
-

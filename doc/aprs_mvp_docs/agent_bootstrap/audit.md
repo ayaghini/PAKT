@@ -1,258 +1,24 @@
 # Agent Update Audit
 
-Date: 2026-03-09
-Scope: review of recently added/updated firmware and desktop test app code, plus CI verification path.
+Date: 2026-03-16
+Purpose: rolling implementation and verification ledger for the current MVP branch.
 
-## Fix Log (2026-03-14)
+## Archived Resolved Reviews
 
-All findings below have been resolved in the same session. Fixed-by references indicate the changed file.
+The detailed review findings from 2026-03-14 and the early 2026-03-15 follow-up pass were rechecked against the current tree and are still resolved. Those issue-by-issue review sections were removed here to keep this file focused on active implementation state and later milestone passes.
 
-| # | Severity | Status | Fixed in |
-|---|----------|--------|----------|
-| R1 | Critical | **FIXED** | `test_tx_scheduler.cpp`, `test_capability.cpp`, `test_telemetry.cpp` |
-| R2 | Critical | **FIXED** | `test_tx_scheduler.cpp` |
-| R3 | High     | **FIXED** | `message_tracker.py` |
-| F1 | Critical | **FIXED** | `BleServer.cpp` |
-| F2 | High     | **FIXED** | `.github/workflows/ci.yml` |
-| F3 | Medium   | **FIXED** | `BleChunker.cpp` |
-| F4 | Low      | deferred – cosmetic only | — |
+Resolved items confirmed in the current repo include:
+- host-test `main()` duplication removed
+- `TxScheduler::kMaxMsgIdStr` test references corrected
+- TX result placeholder remap in `message_tracker.py`
+- duplicate `BleServer.cpp` callback bodies removed
+- CI app-tests install the required Python dependencies
+- BLE chunker oldest-slot eviction logic corrected
+- GPS telemetry field/schema alignment completed
+- bootstrap GPS status conflict corrected
+- tracked Python bytecode artifacts removed and ignored
 
----
-
-## Fix Details (2026-03-14)
-
-### R1 – Multiple `main()` definitions (Critical) — FIXED
-- Removed `#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN` from `test_tx_scheduler.cpp`, `test_capability.cpp`, and `test_telemetry.cpp`.
-- The macro now appears only in `test_main.cpp` (the designated entry-point TU).
-
-### R2 – `TxScheduler::kMaxMsgIdStr` undefined (Critical) — FIXED
-- `kMaxMsgIdStr` is defined at namespace scope (`pakt::kMaxMsgIdStr`) in `TxMessage.h`, not as a `TxScheduler` member.
-- Replaced all six occurrences of `TxScheduler::kMaxMsgIdStr` with `kMaxMsgIdStr` in `test_tx_scheduler.cpp`; `using namespace pakt;` already in scope.
-
-### R3 – TX result tracking cannot correlate firmware msg_id (High) — FIXED
-- Added `MessageTracker._remap_placeholder(firmware_msg_id)` in `message_tracker.py`.
-- When `on_tx_result` receives a `msg_id` not in `_messages`, it remaps the oldest pending `local:N` placeholder entry to the firmware-assigned ID, then processes normally.
-- All subsequent `acked`/`timeout`/`error` notifications for that message are now resolved correctly.
-
-### F1 – Duplicate function definitions in BleServer.cpp (Critical) — FIXED
-- Removed the stub bodies of `on_config_chunk_complete` (old lines 181–189) and `on_tx_req_chunk_complete` (old lines 191–194) that appeared immediately after the chunker globals.
-- The forward declarations at lines 175–176 are retained; the real implementations later in the file (`on_config_chunk_complete` forwarding to `handlers_.on_config_write`, `on_tx_req_chunk_complete` forwarding to `handlers_.on_tx_request`) are the sole definitions.
-
-### F2 – CI missing `bleak` dependency (High) — FIXED
-- Changed the `app-tests` CI step from `pip install pytest` to `pip install -r app/desktop_test/requirements.txt`.
-- `requirements.txt` already declares `bleak>=0.22.0` and `pytest>=8.0.0`, so no new files were needed.
-
-### F3 – Slot eviction wrong comparison in BleChunker (Medium) — FIXED
-- Old: `if ((s.start_ms - oldest->start_ms) > timeout_ms_)` — compares slot-to-slot delta against timeout, not actual age.
-- New: `if ((now_ms - s.start_ms) > (now_ms - oldest->start_ms))` — compares monotonic ages of each slot; uint32_t subtraction handles wrap correctly for ages < 2³¹ ms.
-
-### F4 – Text encoding artifacts (Low) — deferred
-- Cosmetic issue in comments and CLI log strings. No runtime impact. Deferred to a housekeeping pass.
-
----
-
-## Refresh Review (new updates observed later on 2026-03-09)
-
-### New findings (ordered by severity)
-
-1. **Critical: host test binary has multiple `main()` definitions**
-- Files:
-  - `firmware/test_host/test_main.cpp:2`
-  - `firmware/test_host/test_tx_scheduler.cpp:6`
-  - `firmware/test_host/test_capability.cpp:3`
-  - `firmware/test_host/test_telemetry.cpp:5`
-- Evidence:
-  - `DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN` is defined in 4 separate translation units.
-- Impact:
-  - Host tests should fail at link time (multiple `main` symbols).
-- Recommendation:
-  - Keep the macro only in `test_main.cpp`; remove it from the other test files.
-
-2. **Critical: host tests reference a non-existent constant**
-- File: `firmware/test_host/test_tx_scheduler.cpp`
-- Evidence:
-  - Uses `TxScheduler::kMaxMsgIdStr` in multiple places (for example line 53), but `kMaxMsgIdStr` is defined in `TxMessage.h` namespace scope, not as a `TxScheduler` member.
-- Impact:
-  - Host test compile failure.
-- Recommendation:
-  - Replace with `pakt::kMaxMsgIdStr` (or expose an equivalent constant from `TxScheduler`).
-
-3. **High: desktop message state tracking cannot correlate TX results**
-- Files:
-  - `app/desktop_test/pakt_client.py:209`
-  - `app/desktop_test/pakt_client.py:282`
-  - `app/desktop_test/message_tracker.py:94`
-- Evidence:
-  - Sent messages are registered under local keys like `local:{self._msg_id}`.
-  - TX result handling looks up by firmware `msg_id` from notify JSON.
-  - No mapping step exists from local placeholder ID to firmware-assigned ID.
-- Impact:
-  - Message queue can remain `PENDING` even when firmware reports `acked`/`timeout`.
-- Recommendation:
-  - Use firmware-assigned `msg_id` from TX request/write response path, or implement first-TX-result remap from local placeholder to firmware ID.
-
-## Findings (ordered by severity)
-
-1. **Critical: duplicate function definitions in BLE server callbacks**
-- File: `firmware/components/ble_services/BleServer.cpp`
-- Evidence:
-  - `on_config_chunk_complete` is defined at lines 181 and 408.
-  - `on_tx_req_chunk_complete` is defined at lines 191 and 416.
-- Impact:
-  - This is a hard C++ compile/link blocker (redefinition in same translation unit).
-  - Firmware build should fail until one definition per function remains.
-- Recommendation:
-  - Keep only one definition for each callback and remove placeholder bodies.
-
-2. **High: CI app-tests job likely fails due missing `bleak` dependency**
-- Files:
-  - `.github/workflows/ci.yml:51-54`
-  - `app/desktop_test/transport.py:23`
-- Evidence:
-  - CI installs only `pytest`.
-  - `transport.py` imports `from bleak import BleakClient, BleakScanner` at module import time.
-  - Tests import `transport` directly (`app/desktop_test/test_app.py:17`), so import fails before mocks are applied if `bleak` is absent.
-- Impact:
-  - `app-tests` job is fragile/broken in clean CI environments.
-- Recommendation:
-  - Either install `bleak` in CI, or move/import-guard bleak inside runtime methods and inject mocks cleanly for unit tests.
-
-3. **Medium: slot eviction logic in BLE chunk reassembly appears incorrect**
-- File: `firmware/components/ble_services/BleChunker.cpp:130-134`
-- Evidence:
-  - Oldest-slot selection compares `(s.start_ms - oldest->start_ms) > timeout_ms_`.
-  - This does not reliably select the oldest active slot; it compares slot-to-slot delta against timeout, and unsigned wrap can mislead selection.
-- Impact:
-  - Under slot pressure, eviction can pick wrong slot, potentially dropping newer in-flight messages or causing non-deterministic behavior.
-- Recommendation:
-  - Select oldest by monotonic age (`now_ms - s.start_ms`), tracking max age among active slots.
-
-4. **Low: text encoding artifacts in comments/log strings**
-- Files: several under `app/desktop_test/*` and `firmware/components/ble_services/*`
-- Evidence:
-  - Rendered characters show mojibake-like sequences in terminal output (e.g., separators/arrows).
-- Impact:
-  - Primarily readability/maintainability issue; low runtime risk.
-- Recommendation:
-  - Normalize file encoding and replace decorative Unicode in source comments/CLI text with ASCII where possible.
-
-## Verification Performed
-
-## Static review
-- Reviewed key updated files:
-  - `app/desktop_test/main.py`
-  - `app/desktop_test/pakt_client.py`
-  - `app/desktop_test/transport.py`
-  - `app/desktop_test/chunker.py`
-  - `app/desktop_test/config_store.py`
-  - `app/desktop_test/test_app.py`
-  - `app/desktop_test/test_chunker.py`
-  - `firmware/components/ble_services/BleServer.cpp`
-  - `firmware/components/ble_services/BleChunker.cpp`
-  - `.github/workflows/ci.yml`
-
-## Runtime verification attempts
-- `cmake` not available in current environment (`CommandNotFoundException`), so host C++ tests could not be built/run.
-- `pytest` not available in current environment (`No module named pytest`), so Python tests could not be run.
-- Attempt to install app requirements timed out/failed due local temp permission issue, so runtime verification remains blocked.
-- Python syntax check succeeded for all files under `app/desktop_test` via `python -m py_compile`.
-
-## Overall Assessment
-
-The update introduces useful structure for desktop BLE testing and chunked transport, but there are multiple blocking correctness issues across firmware and tests (BLE callback redefinition, host-test build breakages, and TX-result tracking mismatch). These should be fixed before treating the branch as a stable baseline.
-
----
-
-## Follow-up Review (2026-03-15)
-
-Scope: current tree review after prior fixes, focused on `agent_bootstrap` docs, firmware, and host-test consistency.
-
-### Findings (ordered by severity)
-
-1. **Critical: GPS telemetry schema mismatch between parser, telemetry struct, and tests**
-- Files:
-  - `firmware/components/gps/NmeaParser.cpp` (writes `fix_.lat`, `fix_.lon`, `fix_.speed_mps`, `fix_.fix`, `fix_.sats`, `fix_.ts`)
-  - `firmware/components/telemetry/include/pakt/Telemetry.h` (defines `lat_deg`, `lon_deg`, `speed_kmh`, `fix_quality`, `sats_used`, `timestamp_s`)
-  - `firmware/test_host/test_nmea_parser.cpp` (asserts old names such as `p.fix().lat`, `p.fix().speed_mps`, `p.fix().ts`)
-- Impact:
-  - Current implementation is internally inconsistent and cannot be considered build-stable until field naming/units are unified.
-- Recommendation:
-  - Pick one canonical `GpsTelem` schema and align all three surfaces:
-    1. parser writes,
-    2. telemetry JSON serializer,
-    3. host tests.
-  - Also align speed units (`m/s` vs `km/h`) and timestamp field naming.
-
-2. **Medium: agent bootstrap docs conflict on FW-005 status**
-- Files:
-  - `doc/aprs_mvp_docs/agent_bootstrap/implementation_steps_mvp.md` (Step 4b says FW-005 done in software)
-  - `doc/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md` (residual risk table says GPS parser not yet implemented)
-- Impact:
-  - Contradictory status can mislead handoff agents and planning decisions.
-- Recommendation:
-  - Update `gate_pass_matrix.md` to reflect current state (software done, hardware integration pending), matching Step 4b.
-
-3. **Low: generated bytecode files are committed**
-- Files:
-  - `app/desktop_test/__pycache__/*.pyc`
-- Impact:
-  - Adds noisy diffs and Python-version/platform-specific artifacts to source control.
-- Recommendation:
-  - Remove tracked `.pyc` files and add ignore rules (for example `__pycache__/` and `*.pyc`) in `.gitignore`.
-
-### Verification notes (2026-03-15)
-- Static review only in this environment.
-- Runtime validation was not possible locally because `cmake` and `pytest` are unavailable in the current shell environment.
-
----
-
-## Fix Log (2026-03-15)
-
-All findings from the Follow-up Review (2026-03-15) resolved in the same session.
-
-| # | Severity | Finding | Status | Fixed in |
-|---|----------|---------|--------|----------|
-| 1 | Critical | GPS telemetry schema mismatch | **FIXED** | `NmeaParser.cpp`, `Telemetry.h`, `test_nmea_parser.cpp` |
-| 2 | Medium | agent bootstrap docs conflict on FW-005 status | **FIXED** | `gate_pass_matrix.md` |
-| 3 | Low | generated bytecode files committed | **FIXED** | `.gitignore` (created), `git rm --cached` applied |
-
-### Fix Details (2026-03-15)
-
-#### Finding 1 – GPS telemetry schema mismatch (Critical) — FIXED
-
-Canonical schema is `GpsTelem` in `Telemetry.h` (fields: `lat_deg`, `lon_deg`, `alt_m`, `speed_kmh`, `course_deg`, `sats_used`, `fix_quality`, `timestamp_s`).
-
-**`NmeaParser.cpp`** (`parse_rmc` + `parse_gga`):
-- `fix_.lat` → `fix_.lat_deg`
-- `fix_.lon` → `fix_.lon_deg`
-- `fix_.speed_mps = ... * 0.5144f` → `fix_.speed_kmh = ... * 1.852` (knots → km/h)
-- `fix_.ts = ...` → `fix_.timestamp_s = static_cast<uint32_t>(make_timestamp(...))`
-- `fix_.fix` → `fix_.fix_quality`
-- `fix_.sats` → `fix_.sats_used`
-
-**`Telemetry.h`**:
-- Updated `timestamp_s` comment from "GPS seconds-of-week" to "Unix timestamp (seconds since 1970-01-01 UTC), 0 if unknown".
-
-**`test_nmea_parser.cpp`** — all field-name and speed-value references updated to match:
-- All `.lat` / `.lon` occurrences → `.lat_deg` / `.lon_deg`
-- `.speed_mps` → `.speed_kmh`; assertion value `6.0 * 0.5144` → `6.0 * 1.852`
-- `.ts` → `.timestamp_s`; literals changed to unsigned (`764426119u`, `946684800u`, `0u`)
-- `.fix` → `.fix_quality`; `.sats` → `.sats_used`
-
-#### Finding 2 – Docs conflict on FW-005 status (Medium) — FIXED
-
-Updated the GPS residual-risk row in `gate_pass_matrix.md` from "not yet implemented" to reflect current state: NmeaParser software complete, 37 host tests written, UART hardware integration pending.
-
-#### Finding 3 – Committed bytecode files (Low) — FIXED
-
-- Ran `git rm --cached app/desktop_test/__pycache__/ -r` to untrack 14 `.pyc` files.
-- Created `.gitignore` at repo root covering `__pycache__/`, `*.py[cod]`, build artefacts, ESP-IDF cache, and common IDE/OS files.
-
-### Runtime validation status (2026-03-15)
-
-- `cmake` / `pytest` unavailable in current shell; test execution not performed.
-- Changes are purely field-name renames and unit conversion — no logic changes.
-- The only test value that changed is the speed assertion: `3.0864 m/s → 11.112 km/h`; both derive from the same 6-knot input with the correct conversion factor.
+Those older resolved review details remain available in git history if needed.
 
 ---
 
@@ -500,6 +266,17 @@ NVS persistence on-device validation remains pending hardware (flash + NVS drive
 
 ---
 
+## KISS reality-check note (archived)
+
+The detailed KISS implementation reality-check review from early 2026-03-16 was removed from this active ledger after confirming its findings were closed by later pass-2 through pass-5 changes:
+- KISS TX now reaches the shared TX path
+- KISS RX is wired through the AX.25 queue drain path
+- desktop KISS bridge multi-chunk RX reassembly is implemented
+
+The useful implementation outcome is preserved in the later KISS completion and pass logs below, while the now-resolved issue list is left to git history.
+
+---
+
 ## Post-FW-016 cleanup sprint (2026-03-15)
 
 ### Changes
@@ -579,3 +356,241 @@ Three new tests for `config_to_json`:
 ### `firmware/test_host/CMakeLists.txt`
 
 Added `SA818_INCLUDE`, `SA818_SRC` (3 `.cpp` files), `test_sa818.cpp`.
+
+---
+
+## KISS software completion sprint (2026-03-16, pass 2)
+
+Scope: close four KISS gaps identified in the 2026-03-16 audit. All changes are pure software; hardware bring-up items remain blocked.
+
+Historical note: some pass-2 "next actions" and blocked items below were later closed by pass 3-5. Treat this section as a dated implementation snapshot, not the current open-issues list.
+
+### Changes made
+
+| # | Gap | Files changed | Summary |
+|---|-----|--------------|---------|
+| K1 | KISS TX → shared TX queue | `firmware/main/main.cpp`, `firmware/components/aprs_fsm/include/pakt/AprsTaskContext.h`, `firmware/components/aprs_fsm/AprsTaskContext.cpp`, `firmware/test_host/test_tx_integration.cpp` | `handlers.on_kiss_tx` now decodes KISS frame via `KissFramer::decode` then calls `g_aprs_ctx->push_kiss_ax25()`. `AprsTaskContext` extended with second SPSC ring (depth 4, max 330 B) and `set_raw_tx_fn(RawTxFn)`. Ring drained in `tick()` via configurable raw TX function (stub pending audio pipeline). 9 new C++ tests added (26→35). |
+| K2 | KISS RX drain wired | `firmware/main/main.cpp` | `aprs_task` tick loop now drains `g_rx_ax25_queue`: each decoded AX.25 frame calls `notify_rx_packet` (native) and `KissFramer::encode` + `notify_kiss_rx` (KISS). File-static `Ax25RxQueue` SPSC added (depth 8); audio_task updated with exact producer call-site comment. |
+| K3 | `notify_kiss_rx` INT-002 chunking | `firmware/components/ble_services/BleServer.cpp`, `firmware/components/ble_services/include/pakt/BleServer.h` | Rewrote `notify_kiss_rx` to send INT-002 chunks (kChunkPayload=17, per MTU=23 assumption) via `ble_gatts_notify_custom`, bypassing per-characteristic rate limiter. Added `kiss_rx_msg_id_` counter to BleServer private state. |
+| K4 | Desktop multi-chunk KISS RX | `app/desktop_test/kiss_bridge.py`, `app/desktop_test/test_kiss_bridge.py` | `_on_kiss_rx_notify` rewritten: accumulates chunks per msg_id in `_rx_pending` dict (max 4 slots, LRU eviction), sorts by chunk_idx, delivers on completion. `_deliver_kiss_frame` fixed to not add extra FEND delimiters. `_rx_pending` cleared on disconnect. 12 new Python tests (38→50). |
+
+### Pre-existing test bugs fixed (opportunistic, not regressions)
+
+| File | Fix |
+|------|-----|
+| `firmware/test_host/test_aprs.cpp:131` | `||` inside `CHECK()` macro forbidden by doctest — extracted to `bool has_msg_id` |
+| `firmware/test_host/test_ax25.cpp:24` | Expected value `0xB915` was CRC-CCITT-FALSE (non-reflected). AX.25 uses reflected CRC-16/0x8408; correct value for `{0x41}` is `0xA3F5`. Comment updated. |
+| `firmware/test_host/test_ax25.cpp:38,190` | Residue expected `0xF0B8` (raw running CRC) but `fcs()` applies `^ 0xFFFF` xorout. Correct expected return value is `0x0F47 = 0xF0B8 ^ 0xFFFF`. |
+| `firmware/components/gps/NmeaParser.cpp:135` | `2000 + yy` always — year 94 → 2094 instead of 1994. Fixed to NMEA Y2K convention: `yy >= 70 ? 1900 + yy : 2000 + yy`. |
+
+### Test results (2026-03-16, pass 2)
+
+| Suite | Result |
+|-------|--------|
+| Python (test_kiss_bridge, test_chunker, test_telemetry_app, test_capability, test_messaging) | **188 passed** in 0.05s |
+| C++ host tests | **353 passed, 5 failed** (all 5 failures are pre-existing AFSK modem simulation tests: `AfskDemodulator` returns empty in pure-software sim; hardware timing/level calibration required — not caused by this session's changes) |
+
+### Hardware-blocked items (unchanged from audit)
+
+- Real AFSK TX via SA818 (RawTxFn is a log stub)
+- Real audio RX → AX.25 decode → Ax25RxQueue.push() (audio_task is still a stub)
+- Third-party KISS client validation (APRSdroid, Direwolf, YAAC, Xastir)
+- BLE security validation for KISS TX writes (encrypted + bonded enforcement on hardware)
+
+### Next agent actions
+
+1. Step 2 (FW-004): wire SGTL5000 I2S driver + AFSK demodulator; push decoded frames into `g_rx_ax25_queue` in audio_task
+2. Step 1 hardware: SA818 UART bring-up; replace `RawTxFn` stub with real `radio.ptt(true)` + AFSK TX
+3. First hardware session: connect kiss_bridge.py, send KISS TX frame, verify firmware log; verify KISS RX notify reaches client after step 2 is complete
+4. Validate AFSK modem round-trip host tests once hardware-calibrated timing constants are known
+
+---
+
+## Fix Log (2026-03-16, pass 3)
+
+### AFSK demodulator root-cause analysis and fix
+
+Historical note: this section records the pass-3 state. Later pass-4 and pass-5 entries supersede parts of the clocking and TX-path status below.
+
+Two bugs in `AfskDemodulator.cpp` caused all 5 `TEST_SUITE("AFSK modem round-trip")` tests to fail:
+
+**Bug 1 — ones_count abort threshold off-by-one (Critical)**
+- `if (++ones_count_ >= 6)` triggered an abort when the 6 consecutive 1-bits inside an HDLC flag (0x7E = 0b01111110, sent LSB-first as 0,1,1,1,1,1,1,0) were received inside a frame. The abort fired before the trailing 0-bit could complete the 0x7E pattern in the shift register, so `dispatch_frame()` was never called.
+- Fix: changed threshold to `>= 7`. HDLC specifies abort only on 7 or more consecutive 1-bits.
+
+**Bug 2 — Q = 3.5 causes excessive biquad bandpass group delay (Critical)**
+- Group delay of a biquad bandpass at centre frequency = Q × Fs / (π × fc).
+- At Q = 3.5, fc = 1200 Hz, Fs = 8000 Hz: delay ≈ 7.4 samples, exceeding one symbol period (6.667 samples at 1200 baud / 8000 Hz).
+- The decision signal (mark_env > space_env) lagged by ≈1 symbol, causing the transition-tracking synchroniser to sample adjacent symbols. All bit decisions were wrong; no valid frames were recovered.
+- Diagnostic sweep confirmed Q ∈ {1.2, 1.3, 1.5, 2.0} all pass 5/5 frames; Q = 3.5 gives 0/5.
+- Fix: changed `static constexpr float kQ = 3.5f` to `1.5f` in both the constructor and `reset()`. Q = 1.5 gives group delay ≈ 3.2 samples (0.48 symbol period), well within the eye opening.
+
+### Audio pipeline wired (Step 2 / FW-004)
+
+Note: this pass-3 section records the initial Step 2 landing. The clocking details below were corrected by pass 4; prefer the pass 4 and pass 5 entries later in this file for current SGTL5000/I2S values.
+
+`audio_task` in `main.cpp` is no longer a stub. The following hardware pipeline is now implemented (hardware-gated at run time):
+
+- I2C master bus initialised on SDA=GPIO8, SCL=GPIO9 at 400 kHz.
+- SGTL5000 detected at I2C address 0x0A; register power-up sequence applied:
+  - ADC path enabled; LINE_IN selected as ADC source.
+  - Initial clock plan in this pass was later superseded by the corrected pass-4 plan.
+  - I2S: slave mode, 16-bit, I2S (Philips) format.
+- I2S RX channel: ESP32-S3 master, MCLK=GPIO4, BCLK=GPIO5, WS=GPIO6, DOUT=GPIO7, DIN=GPIO10.
+  - Initial `I2S_MCLK_MULTIPLE_256` note in this pass was later corrected to the pass-4 `I2S_MCLK_MULTIPLE_1024` / `8.192 MHz` plan.
+- `AfskDemodulator` instantiated at 8 kHz; callback pushes decoded AX.25 frames into `g_rx_ax25_queue`.
+- `aprs_task` already drains `g_rx_ax25_queue` and forwards to native BLE notify + KISS RX notify.
+
+On init failure (I2C/I2S not wired), `audio_pipeline_run()` logs and returns; `audio_task` idles. No crash, no PTT impact.
+
+### Test results (2026-03-16, pass 3)
+
+| Suite | Result |
+|-------|--------|
+| C++ host tests | **358 passed, 0 failed** (all 5 AFSK round-trip tests now pass after Bug 1 + Bug 2 fix) |
+| Python tests | unchanged — 188 passed |
+
+### Hardware-blocked items (updated)
+
+- Real AFSK TX via SA818 (RawTxFn is a log stub in aprs_task; TX path wiring is next)
+- SGTL5000 I2C/I2S runtime validation (audio_pipeline_run() will fail gracefully until hardware is connected)
+- Exact MCLK calibration: see pass 4/5 current plan (`8.192 MHz` target); still measure and adjust during bring-up
+- ADC input gain tuning (CHIP_ADC_CTRL = 0x0000 = 0 dB starting point)
+- Third-party KISS client validation (APRSdroid, Direwolf, YAAC, Xastir)
+- BLE security validation for KISS TX writes
+
+### Next agent actions
+
+1. Step 1 / SA818 TX: replace `RawTxFn` stub in `aprs_task` with real PTT + AFSK TX pipeline (Sa818Radio.ptt + AfskModulator + I2S write via the audio pipeline)
+2. First hardware session: flash → BLE connect → bonded-write rejection (G3) → PTT safe-off (G3) → SA818 UART validation
+3. SGTL5000 MCLK calibration + ADC gain tuning during audio bring-up
+
+---
+
+## Fix Log (2026-03-16, pass 4)
+
+Scope: SGTL5000 clocking fix, full I2S TX channel, real `afsk_tx_frame()` implementation, TX path wired end-to-end, new TX buffer sizing tests added.
+
+### SGTL5000 / I2S clocking mismatch (Critical — would prevent codec lock at runtime)
+
+Previous code wrote `CHIP_CLK_CTRL = 0x0038` which encodes `SYS_FS = 48 kHz, MCLK_FREQ = 256×SYS_FS → MCLK = 12.288 MHz`. But the I2S driver used `I2S_MCLK_MULTIPLE_256 × 8000 Hz = 2.048 MHz`. These two clocks disagree by a factor of 6 — the SGTL5000 would never lock.
+
+**Fix (main.cpp `sgtl5000_init()`):**
+- `CHIP_CLK_CTRL = 0x0020` → `SYS_FS = 32 kHz, RATE_MODE = ÷4 → 8 kHz effective, MCLK = 256 × 32000 = 8.192 MHz`
+- I2S `mclk_multiple = I2S_MCLK_MULTIPLE_1024` → `1024 × 8000 = 8.192 MHz` — now matches codec expectation.
+- `BCLK = 256 kHz` (16-bit stereo Philips); `MCLK / BCLK = 32` — exact integer, no jitter.
+
+**Additional SGTL5000 register fixes:**
+- `CHIP_SSS_CTRL = 0x1000` (was 0x0000): routes I2S_IN → DAC for TX audio. Previous value routed ADC → DAC.
+- `CHIP_ANA_CTRL = 0x0104` (was 0x0114): clears `MUTE_LO` (bit 4). Previous value kept line-out muted — SA818 AF_IN would receive silence during TX.
+- Added `CHIP_DAC_VOL = 0x3C3C` (0 dB) and final `ANA_POWER = 0x42E0` writes to complete power-up sequence.
+
+### I2S TX channel wired
+
+`audio_pipeline_run()` now creates a full-duplex I2S channel pair (TX + RX) via `i2s_new_channel(&cfg, &tx_chan, &rx_chan)`. Previously only RX was allocated (`i2s_new_channel(&cfg, nullptr, &rx_chan)`), which prevented any audio TX. Both channels share the same MCLK/BCLK/WS. The TX handle is published to `g_i2s_tx_chan` after `i2s_channel_enable(tx_chan)`.
+
+### `afsk_tx_frame()` implemented (replaces stub)
+
+New file-static function in `main.cpp`:
+1. Guards: `g_radio == nullptr || g_i2s_tx_chan == nullptr` → log + return false.
+2. `AfskModulator::modulate_frame()` writes into `g_tx_pcm_buf[25600]` (global static, avoids stack pressure).
+3. `g_radio->ptt(true)` → 10 ms ramp-up → `i2s_channel_write(g_i2s_tx_chan, ...)` with per-frame timeout → 150 ms DMA drain → `g_radio->ptt(false)`.
+4. Returns false if modulation returns 0, PTT fails, I2S write errors, or byte count mismatches.
+
+**TX PCM buffer sizing:** worst-case AX.25 (330 B, all 0xFF) with maximum bit stuffing → ~22 400 samples at 8 kHz / 1200 baud. `kAfskMaxPcmSamples = 25600` (14 % margin). Buffer sizing tests added and verified.
+
+### RadioTxFn and RawTxFn stubs replaced
+
+Both lambda stubs in `aprs_task` now call `afsk_tx_frame()` after encoding the frame via `aprs::encode_message` + `ax25::encode`. `aprs_task` stack increased from 4096 → 6144 words to accommodate AX.25 / APRS encoding stack frames.
+
+`g_radio` is published by `radio_task` after successful SA818 init. `g_i2s_tx_chan` is published by `audio_task` after I2S enable. Both are checked for null before use — no mutex needed (single writer, single reader).
+
+### New host tests (TX buffer sizing)
+
+Added `TEST_SUITE("AfskModulator TX buffer sizing")` to `test_host/test_afsk_modem.cpp`:
+1. **max-encoded AX.25 frame fits in 25 600 samples at 8 kHz** — worst-case 0xFF payload.
+2. **zero-byte frame (degenerate) produces preamble+tail only** — null/empty boundary.
+3. **output buffer exactly 1 sample too small returns 0** — no silent truncation.
+4. **APRS encode_message + ax25::encode round-trip within buffer** — simulates full RadioTxFn path.
+
+### Test results (2026-03-16, pass 4)
+
+| Suite | Result |
+|-------|--------|
+| C++ host tests | **362 passed, 0 failed** (+4 TX buffer sizing tests; all pass) |
+| Python tests | unchanged — 188 passed |
+
+---
+
+## Fix Log (2026-03-16, pass 5)
+
+Scope: Correct `AfskModulator::modulate_frame()` truncation signaling; prove exact-fit validity; add definitive tests.
+
+### Root cause: post-hoc `pos == out_max` check was ambiguous
+
+The pass 4 fix used `if (pos == out_max) return 0` after writing. This is ambiguous:
+- **Genuine truncation**: the buffer ran out mid-frame; pos stopped at `out_max`.
+- **Exact-fit success**: the frame's last sample happened to land exactly at position `out_max - 1`, leaving `pos == out_max` — a fully valid write.
+
+Both cases produce `pos == out_max`, making the check incorrectly return 0 for valid exact-fit frames.
+
+### Fix: inline truncation detection in `emit_bit_samples`
+
+`emit_bit_samples` was restructured from:
+```cpp
+for (int i = 0; i < n && pos < out_max; ++i) { out[pos++] = ...; }
+```
+to:
+```cpp
+for (int i = 0; i < n; ++i) {
+    if (pos >= out_max) return true;  // buffer full BEFORE this write — truncated
+    out[pos++] = ...;
+}
+return false;
+```
+The check now happens **before** each write. Returning `true` means a sample was skipped (truncation). Returning `false` after the loop means all `n` samples were written — even if `pos == out_max` after the last write.
+
+All three private emit methods (`emit_bit_samples`, `emit_data_bit`, `emit_flag`) now return `bool` (truncated?). `modulate_frame` propagates via `bool truncated` with short-circuit: once truncated, further emit calls are skipped. Final return: `truncated ? 0 : pos`.
+
+**Exact-fit trace** (`out_max == real_n`): last sample write: `pos = out_max - 1 < out_max` → write → `pos = out_max`. Loop exit (i == n). Return false. `modulate_frame` returns `pos = out_max = real_n`. ✓
+
+**Truncation trace** (`out_max < real_n`): at some sample, `pos == out_max` before write → return true. `modulate_frame` returns 0. ✓
+
+### New tests (pass 5, added to `test_host/test_afsk_modem.cpp`)
+
+5. **exact-fit buffer returns sample count, not 0** — `out_max = real_n` (1493 for the 4-byte test frame); verifies return value is `real_n`, not 0. This test would have failed with the pass 4 `pos == out_max` fix.
+6. **significantly undersized buffer returns 0** — `out_max = 10` (cannot fit even the first preamble flag); verifies early truncation is detected.
+
+### Exact-fit answer: YES, exact-fit success is possible
+
+The fractional sample accumulator (`8000/1200 = 6.6̄`) produces a deterministic per-bit sample count pattern. For any frame of fixed content, `real_n` is a definite integer. Passing `out_max = real_n` produces a perfectly valid full frame write with `pos == out_max == real_n`. This is a success case that must return `real_n`, not 0.
+
+### Test results (2026-03-16, pass 5)
+
+| Suite | Result |
+|-------|--------|
+| C++ host tests | **364 passed, 0 failed** (+2 new tests: exact-fit and significantly-undersized) |
+| Python tests | unchanged — 188 passed |
+
+Key verified values: worst-case AX.25 (330 B, 0xFF) → 22 400 samples < 25 600 limit. 4-byte test frame → 1493 samples. APRS encode_message + ax25::encode 66 B frame → 4800 samples.
+
+### Files changed (pass 5)
+
+- `firmware/components/modem/AfskModulator.cpp` — `emit_bit_samples`, `emit_data_bit`, `emit_flag` return `bool`; `modulate_frame` uses `bool truncated` with short-circuit; post-hoc `pos == out_max` check removed.
+- `firmware/components/modem/include/pakt/AfskModulator.h` — private method signatures updated (void → bool).
+- `firmware/test_host/test_afsk_modem.cpp` — 2 new tests added.
+
+### Hardware-blocked items (updated)
+
+- SGTL5000 MCLK verification on scope: measure 8.192 MHz at codec MCLK pin during boot; adjust `mclk_multiple` if ESP-IDF PLL produces a measurably off frequency.
+- SGTL5000 `CHIP_ANA_POWER` bit assignments: values used (0x42E0) based on public application notes; verify against physical datasheet during bring-up.
+- ADC input gain tuning (`CHIP_ADC_CTRL = 0x0000 = 0 dB` starting point; adjust with SA818 AF_OUT signal level).
+- SA818 TX audio deviation calibration: measure with calibrated TNC during first RF session.
+- KISS TX hardware validation: connect `kiss_bridge.py`, send a KISS frame, verify AFSK output on SA818.
+- Third-party KISS client validation (APRSdroid, Direwolf, YAAC, Xastir).
+
+### Next agent actions
+
+1. Hardware bring-up (HW-010): flash/boot → G3 BLE security → G3 PTT safe-off → SA818 UART → SGTL5000 MCLK.
+2. KISS TX validation: `kiss_bridge.py` → firmware KISS RX → AFSK TX on SA818 output.
+3. GPS task UART: replace stub driver in `gps_task` with real UART read loop.

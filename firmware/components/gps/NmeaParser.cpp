@@ -132,7 +132,8 @@ bool NmeaParser::parse_rmc(const char *fields[], size_t count)
     if (dd < 0 || mm < 0 || yy < 0) return false;
     rmc_day_   = static_cast<uint8_t>(dd);
     rmc_month_ = static_cast<uint8_t>(mm);
-    rmc_year_  = static_cast<uint16_t>(2000 + yy);
+    // 2-digit year: 70–99 → 1970–1999, 00–69 → 2000–2069 (NMEA Y2K convention).
+    rmc_year_  = static_cast<uint16_t>(yy >= 70 ? 1900 + yy : 2000 + yy);
 
     // Parse time.
     uint8_t h = 0, m = 0, s = 0;

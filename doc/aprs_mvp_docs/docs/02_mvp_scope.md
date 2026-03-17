@@ -10,6 +10,12 @@
   - APRS payloads (position, message)
 - PTT control and channel config via SA818 UART
 
+### Interoperability
+- KISS TNC over BLE so third-party APRS software can use the device in MVP
+- KISS TX and RX share the same RF/TX scheduler pipeline as native PAKT BLE
+- Capability advertisement must indicate whether `kiss_ble` is supported
+- Native PAKT BLE endpoints and KISS-over-BLE must coexist without breaking each other
+
 ### GPS
 - Parse NMEA, maintain last fix + speed/course + UTC time
 - Expose GPS data to BLE clients (desktop test app and phone app)
@@ -24,10 +30,11 @@
 - Data:
   - RX packet stream
   - TX request queue + TX status
+  - KISS RX/TX service for third-party clients
   - Device telemetry (battery %, temp if available, RSSI proxy if available)
 - Security baseline:
   - Encrypted connection for all writes
-  - Bonded link required for config/command/TX endpoints
+  - Bonded link required for config/command/TX/KISS endpoints
   - Physical user action required to enter pairing mode
 
 ### Power
@@ -42,6 +49,7 @@ Desktop test app (pre-phone, required for MVP bring-up):
 - Trigger commands (`beacon_now`, controlled `radio_set`)
 - Show RX packet stream, status, and telemetry
 - Send TX request and show TX result/timeout
+- Exercise and validate KISS-over-BLE data flow
 - Export session logs for bench debugging
 
 Phone app (MVP user UX):
@@ -52,7 +60,6 @@ Phone app (MVP user UX):
 
 ## Should-have (post-MVP)
 - Smart beaconing
-- KISS TNC over BLE so third-party apps can use the device
 - Store-and-forward mailbox mode
 - Firmware update over BLE/Wi-Fi
 - Digipeater / iGate mode (requires more policy + operational considerations)

@@ -7,6 +7,12 @@ No hardware required for the first three sections.
 
 ## 1. Prerequisites
 
+Important toolchain split:
+
+- Firmware target (`firmware/`) is built through ESP-IDF using `idf.py`.
+- Raw CMake is not the direct developer entrypoint for firmware builds.
+- Raw CMake is used for the host-only test target in `firmware/test_host`.
+
 ### 1.1 Host unit tests (C++, CMake)
 
 | Tool | Minimum version | Notes |
@@ -78,6 +84,10 @@ Expected output: all tests pass. BLE transport tests use mocks (no hardware need
 ---
 
 ## 4. Firmware build (ESP-IDF, no hardware)
+
+Use ESP-IDF's `idf.py` for firmware builds. Although ESP-IDF uses CMake under
+the hood, developers and agents should treat `idf.py` as the supported command
+surface for the firmware target.
 
 ```bash
 # Activate ESP-IDF environment (adjust path to your install):
@@ -161,4 +171,3 @@ pytest app/desktop_test/test_messaging.py -v
 # Run only SA818 driver tests (18 tests):
 ./build/test_host/pakt_tests -tc="Sa818*" --reporters=console
 ```
-

@@ -31,6 +31,7 @@ enum class Feature : uint32_t {
     CONFIG_RW    = 1u << 4,   // Device config read/write characteristic
     GPS_ONBOARD  = 1u << 5,   // Onboard GPS module present and active
     HF_AUDIO     = 1u << 6,   // HF audio bridge (discovery track, not MVP)
+    KISS_BLE     = 1u << 7,   // KISS TNC over BLE (INT-003, MVP-required)
 };
 
 static constexpr uint32_t kMvpFeatures =
@@ -39,7 +40,8 @@ static constexpr uint32_t kMvpFeatures =
     static_cast<uint32_t>(Feature::TELEMETRY)     |
     static_cast<uint32_t>(Feature::MSG_ACK)       |
     static_cast<uint32_t>(Feature::CONFIG_RW)     |
-    static_cast<uint32_t>(Feature::GPS_ONBOARD);
+    static_cast<uint32_t>(Feature::GPS_ONBOARD)   |
+    static_cast<uint32_t>(Feature::KISS_BLE);
 
 // ── Capability record ─────────────────────────────────────────────────────────
 

@@ -19,9 +19,11 @@ TEST_SUITE("ax25::fcs")
 
     TEST_CASE("known-good FCS for ASCII 'A'")
     {
-        // CRC-16/CCITT (reflected) of {0x41} = 0xB915
+        // CRC-16/AX.25 (reflected polynomial 0x8408, init 0xFFFF, xorout 0xFFFF) of {0x41}
+        // = 0xA3F5.  Note: CRC-CCITT-FALSE (non-reflected, no xorout) gives 0xB915;
+        // the AX.25 protocol uses the LSB-first reflected variant, hence 0xA3F5.
         uint8_t data[] = {0x41};
-        CHECK(pakt::ax25::fcs(data, 1) == 0xB915u);
+        CHECK(pakt::ax25::fcs(data, 1) == 0xA3F5u);
     }
 
     TEST_CASE("known-good FCS for {0x01, 0x02, 0x03}")
@@ -34,8 +36,9 @@ TEST_SUITE("ax25::fcs")
         memcpy(with_fcs, data, 3);
         with_fcs[3] = (uint8_t)(result & 0xFF);
         with_fcs[4] = (uint8_t)(result >> 8);
-        // When we compute FCS over data+FCS, the result equals 0xF0B8 (CRC-CCITT residual).
-        CHECK(pakt::ax25::fcs(with_fcs, 5) == 0xF0B8u);
+        // When we compute FCS over data+FCS, fcs() applies xorout (^0xFFFF), so the result
+        // is 0xF0B8 ^ 0xFFFF = 0x0F47.  (0xF0B8 is the raw running-CRC residue pre-xorout.)
+        CHECK(pakt::ax25::fcs(with_fcs, 5) == 0x0F47u);
     }
 
     TEST_CASE("FCS is deterministic")
@@ -186,8 +189,8 @@ TEST_SUITE("ax25 encode/decode")
         REQUIRE(len >= 2);
 
         // The FCS over the entire output (including the appended FCS bytes)
-        // must equal 0xF0B8 for this CRC variant.
-        CHECK(pakt::ax25::fcs(buf, len) == 0xF0B8u);
+        // must equal 0x0F47 (= 0xF0B8 ^ 0xFFFF) because fcs() applies xorout.
+        CHECK(pakt::ax25::fcs(buf, len) == 0x0F47u);
     }
 
     TEST_CASE("empty info field is valid")

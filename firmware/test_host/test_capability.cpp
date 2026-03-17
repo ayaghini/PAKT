@@ -144,3 +144,30 @@ TEST_CASE("has: returns true for present feature") {
                             static_cast<uint32_t>(Feature::APRS_2M)};
     CHECK(caps.has(Feature::APRS_2M));
 }
+
+// ── KISS_BLE feature (INT-003) ────────────────────────────────────────────────
+
+TEST_CASE("mvp_defaults: has KISS_BLE feature") {
+    auto caps = DeviceCapabilities::mvp_defaults();
+    CHECK(caps.has(Feature::KISS_BLE));
+}
+
+TEST_CASE("to_json: features array contains kiss_ble in mvp_defaults") {
+    char buf[kCapJsonMaxLen];
+    auto caps = DeviceCapabilities::mvp_defaults();
+    caps.to_json(buf, sizeof(buf));
+    CHECK(contains(buf, "\"kiss_ble\""));
+}
+
+TEST_CASE("to_json: kiss_ble absent when feature bit not set") {
+    char buf[kCapJsonMaxLen];
+    DeviceCapabilities caps{"0.1.0", "EVT-A", 1,
+        kMvpFeatures & ~static_cast<uint32_t>(Feature::KISS_BLE)};
+    caps.to_json(buf, sizeof(buf));
+    CHECK(!contains(buf, "\"kiss_ble\""));
+}
+
+TEST_CASE("has: KISS_BLE absent when feature bit not set") {
+    DeviceCapabilities caps{"0.1.0", "EVT-A", 1, 0};
+    CHECK(!caps.has(Feature::KISS_BLE));
+}

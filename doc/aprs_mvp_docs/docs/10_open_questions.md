@@ -11,6 +11,9 @@
 7. Pairing UX details: dedicated pair button, pairing window timeout, and bond reset flow.
 8. MAX17048 integration details:
    - alert pin usage vs polling-only fuel gauge reads in MVP firmware
-9. Windows desktop app decisions:
+9. KISS interoperability validation target for MVP:
+   - which first reference client do we certify first: YAAC, Xastir, Direwolf, or APRSdroid bridge
+   - whether Windows compatibility harness should prefer virtual COM or TCP bridge first
+10. Windows desktop app decisions:
    - desktop framework choice for BLE client (for example .NET/WinUI)
    - minimum test UI scope before phone app feature work continues

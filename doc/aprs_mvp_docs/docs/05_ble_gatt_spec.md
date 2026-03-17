@@ -14,6 +14,7 @@ The device exposes:
 1. **Device Information Service (Standard):** `0x180A`
 2. **APRS Service (Custom):** configuration, commands, messaging, and status
 3. **Device Telemetry Service (Custom):** runtime telemetry channels
+4. **KISS Service (Custom):** raw KISS TNC frame transport for third-party APRS software
 
 ## Project Base UUID
 
@@ -49,7 +50,7 @@ Standard BLE service.
 | **Device Config**     | `0xA001`      | `544E4332-8A48-4328-9844-3F5CA0010000` | Read, Write            | 256 B           | UTF-8 JSON   | `{"callsign":"W1AW","ssid":9}` |
 | **Device Command**    | `0xA002`      | `544E4332-8A48-4328-9844-3F5CA0020000` | Write Without Response | 64 B            | UTF-8 JSON   | `{"cmd":"beacon_now"}` or `{"cmd":"radio_set","freq_hz":144390000}` |
 | **Device Status**     | `0xA003`      | `544E4332-8A48-4328-9844-3F5CA0030000` | Notify                 | 128 B           | UTF-8 JSON   | `{"radio":"idle","bonded":true,"gps_fix":true,"pending_tx":0,"rx_queue":0,"uptime_s":3600}` |
-| **Device Capabilities** | `0xA004`    | `544E4332-8A48-4328-9844-3F5CA0040000` | Read                   | 128 B           | UTF-8 JSON   | `{"aprs_tx":true,"aprs_rx":true,"gps":true,"ble":true,"version":"0.1.0"}` |
+| **Device Capabilities** | `0xA004`    | `544E4332-8A48-4328-9844-3F5CA0040000` | Read                   | 160 B           | UTF-8 JSON   | `{"fw_ver":"0.1.0","hw_rev":"EVT-A","protocol":1,"features":["aprs_2m","ble_chunking","telemetry","msg_ack","config_rw","gps_onboard","kiss_ble"]}` |
 | **RX Packet Stream**  | `0xA010`      | `544E4332-8A48-4328-9844-3F5CA0100000` | Notify                 | 256 B           | UTF-8 String | APRS packet in TNC2 monitor format |
 | **TX Request**        | `0xA011`      | `544E4332-8A48-4328-9844-3F5CA0110000` | Write                  | 256 B           | UTF-8 JSON   | `{"dest":"APRS","text":"Hello World","ssid":0}` |
 | **TX Result**         | `0xA012`      | `544E4332-8A48-4328-9844-3F5CA0120000` | Notify                 | 64 B            | UTF-8 JSON   | `{"msg_id":"42","status":"tx|acked|timeout|cancelled|error"}` |
@@ -68,6 +69,23 @@ Standard BLE service.
 
 ---
 
+## 4. KISS Service
+
+**Service UUID:** `544E4332-8A48-4328-9844-3F5CA0500000`
+
+| Characteristic | UUID (16-bit) | Full UUID                               | Properties           | Max App Payload | Data Format | Notes |
+| -------------- | ------------- | --------------------------------------- | -------------------- | --------------- | ----------- | ----- |
+| **KISS RX**    | `0xA051`      | `544E4332-8A48-4328-9844-3F5CA0510000` | Notify               | 330 B logical   | Binary KISS | Device -> client, chunked when needed |
+| **KISS TX**    | `0xA052`      | `544E4332-8A48-4328-9844-3F5CA0520000` | Write With Response  | 330 B logical   | Binary KISS | Client -> device, encrypted + bonded |
+
+KISS MVP rules:
+
+- Port 0 only.
+- Data frame type `0x00` required for actual AX.25 transfer.
+- `0x0F` return-from-KISS may be accepted and echoed for compatibility, but the device is not modal; native PAKT BLE and KISS service may coexist.
+- Extended KISS port/parameter commands (`0x01`-`0x06`) are out of scope for MVP and may be ignored safely.
+- MVP maximum logical KISS frame size is 330 bytes after reassembly; oversize frames must be dropped and counted as TX/RX errors.
+
 ## Canonical Schema Source
 
 For JSON field-level contracts, use:
@@ -75,13 +93,16 @@ For JSON field-level contracts, use:
 
 If this file and payload contracts diverge, payload contracts are authoritative.
 
+For KISS binary framing and service behavior, use:
+- `doc/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
+
 ---
 
 ## Security Notes
 
 - Pairing alone is not sufficient for write-capable control endpoints.
 - Require LE Secure Connections with bonding for production firmware.
-- Restrict write access (`Device Config`, `Device Command`, `TX Request`) to encrypted + bonded links.
+- Restrict write access (`Device Config`, `Device Command`, `TX Request`, `KISS TX`) to encrypted + bonded links.
 - Require a physical user action (pair button or boot-time pairing window) before accepting new bonds.
 - Enforce an application-level allowlist for privileged commands (for example `radio_set`).
 
@@ -95,3 +116,4 @@ If this file and payload contracts diverge, payload contracts are authoritative.
   - `chunk_total`: number of chunks.
 - RX and TX endpoints must support reassembly timeout and duplicate-chunk handling.
 - Clients should request a higher MTU, but firmware must still work at default MTU.
+- KISS RX and KISS TX use the same chunk header and timeout rules as the native JSON endpoints.

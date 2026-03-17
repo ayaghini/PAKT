@@ -25,7 +25,7 @@ def _caps_json(**kw) -> str:
 
 def run(coro):
     import asyncio
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ── DeviceCapabilities.parse ──────────────────────────────────────────────────
@@ -186,3 +186,40 @@ class TestCapabilityNegotiator:
         client = self._make_client(_caps_json(fw_ver="9.9.9"))
         run(neg.read(client))
         assert neg.caps.fw_ver == "9.9.9"
+
+
+# ── KISS_BLE feature (INT-003) ────────────────────────────────────────────────
+
+class TestKissBleFeature:
+    def test_kiss_ble_constant_defined(self):
+        assert Feature.KISS_BLE == "kiss_ble"
+
+    def test_kiss_ble_in_mvp_required(self):
+        assert Feature.KISS_BLE in Feature.MVP_REQUIRED
+
+    def test_assumed_mvp_has_kiss_ble(self):
+        caps = DeviceCapabilities.assumed_mvp()
+        assert caps.supports(Feature.KISS_BLE)
+
+    def test_parse_with_kiss_ble(self):
+        raw = json.dumps({
+            "fw_ver": "0.1.0", "hw_rev": "EVT-A", "protocol": 1,
+            "features": list(Feature.MVP_REQUIRED | {Feature.GPS_ONBOARD}),
+        })
+        caps = DeviceCapabilities.parse(raw)
+        assert caps.supports(Feature.KISS_BLE)
+
+    def test_missing_mvp_features_includes_kiss_ble_when_absent(self):
+        caps = DeviceCapabilities.parse(_caps_json(features=["aprs_2m"]))
+        assert Feature.KISS_BLE in caps.missing_mvp_features()
+
+    def test_is_compatible_false_when_kiss_ble_missing(self):
+        # Build a feature list with all MVP features except kiss_ble
+        features = [f for f in Feature.MVP_REQUIRED if f != Feature.KISS_BLE]
+        features.append(Feature.GPS_ONBOARD)
+        caps = DeviceCapabilities.parse(_caps_json(features=features))
+        assert not caps.is_compatible()
+
+    def test_is_compatible_true_when_kiss_ble_present(self):
+        caps = DeviceCapabilities.parse(_caps_json())
+        assert caps.is_compatible()

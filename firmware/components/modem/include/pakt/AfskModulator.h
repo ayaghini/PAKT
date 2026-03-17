@@ -47,13 +47,18 @@ public:
 private:
     // Emit the samples for exactly one bit period at the current tone.
     // Uses a fractional accumulator to maintain correct average baud rate.
-    void emit_bit_samples(int16_t *out, size_t &pos, size_t out_max);
+    // Returns true if the buffer was full before all samples could be written
+    // (genuine truncation); false if all samples were written (pos may equal
+    // out_max on an exact fit — that is not truncation).
+    bool emit_bit_samples(int16_t *out, size_t &pos, size_t out_max);
 
     // Emit one data bit with NRZI encoding and bit stuffing.
-    void emit_data_bit(bool bit, int16_t *out, size_t &pos, size_t out_max);
+    // Returns true on truncation (propagated from emit_bit_samples).
+    bool emit_data_bit(bool bit, int16_t *out, size_t &pos, size_t out_max);
 
     // Emit one HDLC flag byte (0x7E) without bit stuffing.
-    void emit_flag(int16_t *out, size_t &pos, size_t out_max);
+    // Returns true on truncation.
+    bool emit_flag(int16_t *out, size_t &pos, size_t out_max);
 
     uint32_t sample_rate_;
     double   phase_acc_;        // current phase in radians [0, 2π)

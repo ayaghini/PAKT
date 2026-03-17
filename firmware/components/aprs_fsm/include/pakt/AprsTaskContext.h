@@ -51,8 +51,20 @@ public:
     // Returns false if the buffer is full; the BLE handler should reject the write.
     bool push_tx_request(const TxRequestFields &req);
 
+    // Thread-safe (producer side): push a raw AX.25 frame from the KISS TX path.
+    // KISS TX bypasses TxScheduler — KISS is a raw pipe with no APRS retry.
+    // Returns false if the ring buffer is full or the frame is invalid (null/0/oversize).
+    bool push_kiss_ax25(const uint8_t *ax25, size_t len);
+
+    // Set the raw transmit function called for each KISS TX frame in tick().
+    // Not thread-safe; call before any push_kiss_ax25 calls.
+    // If not set, frames are dequeued and silently discarded.
+    using RawTxFn = std::function<bool(const uint8_t *ax25, size_t len)>;
+    void set_raw_tx_fn(RawTxFn fn);
+
     // Consumer side — call from aprs_task loop at regular intervals.
     // Drains all pending ring-buffer entries into TxScheduler, then ticks.
+    // Also drains the KISS TX raw ring and calls raw_tx_fn_ for each frame.
     void tick(uint32_t now_ms);
 
     // Consumer side — call from aprs_task when the APRS layer receives an ack.
@@ -75,6 +87,21 @@ private:
     std::atomic<uint32_t> tail_{0};
 
     uint8_t next_client_id_{0};
+
+    // ── KISS raw TX ring (SPSC, KISS TX path) ─────────────────────────────────
+    // Separate from the APRS message ring: KISS is a raw AX.25 pipe, no retry.
+
+    static constexpr size_t kKissRingDepth = 4;
+    static constexpr size_t kKissMaxAx25   = 330;  // = kKissMaxFrame in KissFramer.h
+
+    struct KissRawEntry {
+        uint8_t data[kKissMaxAx25]{};
+        size_t  len{0};
+    };
+    KissRawEntry           kiss_ring_[kKissRingDepth]{};
+    std::atomic<uint32_t>  kiss_head_{0};
+    std::atomic<uint32_t>  kiss_tail_{0};
+    RawTxFn                raw_tx_fn_;
 };
 
 } // namespace pakt

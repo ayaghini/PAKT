@@ -3,10 +3,15 @@
 Generated: 2026-03-15
 Authority: single source of truth for all JSON wire formats exchanged over BLE.
 
-This document defines the exact JSON schema for every GATT characteristic read,
+This document defines the exact JSON schema for every JSON GATT characteristic read,
 write, and notification payload. Firmware (`PayloadValidator`, `TxResultEncoder`,
 `Telemetry.h`) and the desktop app (`pakt_client.py`, `message_tracker.py`)
 must both conform to these schemas.
+
+KISS-over-BLE is part of MVP, but it is a binary framing contract rather than a
+JSON contract. The KISS source of truth is:
+
+- `doc/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
 
 ---
 
@@ -201,13 +206,7 @@ Desktop app `PowerTelem.parse()` in `telemetry.py` consumes this schema.
 ## 8. Device Capabilities (0xA004) - read only, no security restriction
 
 ```json
-{
-  "aprs_tx": true,
-  "aprs_rx": true,
-  "gps": true,
-  "ble": true,
-  "version": "0.1.0"
-}
+{"fw_ver":"0.1.0","hw_rev":"EVT-A","protocol":1,"features":["aprs_2m","ble_chunking","telemetry","msg_ack","config_rw","gps_onboard","kiss_ble"]}
 ```
 
 Produced by `DeviceCapabilities::to_json()`.
@@ -242,5 +241,4 @@ Desktop app `SysTelem.parse()` in `telemetry.py` consumes this schema.
 - Floating-point: use sufficient precision (≥ 4 decimal places for lat/lon).
 - No trailing commas.
 - Extra unknown fields in write payloads are silently ignored by the validator.
-
 

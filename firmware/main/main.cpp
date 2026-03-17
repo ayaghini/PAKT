@@ -20,17 +20,24 @@
 
 #include "pakt/BleServer.h"
 #include "pakt/DeviceCapabilities.h"
+#include "pakt/KissFramer.h"
 #include "pakt/NmeaParser.h"
 #include "pakt/AprsTaskContext.h"
 #include "pakt/PayloadValidator.h"
 #include "pakt/DeviceConfigStore.h"
 #include "pakt/PttWatchdog.h"
 #include "pakt/PttController.h"
+#include "pakt/AfskDemodulator.h"
+#include "pakt/AfskModulator.h"
+#include "pakt/Aprs.h"
 #include "pakt/Sa818Radio.h"
 #include "NvsStorage.h"
 #include "Sa818UartTransport.h"
 #include "driver/gpio.h"
+#include "driver/i2c_master.h"
+#include "driver/i2s_std.h"
 #include "driver/uart.h"
+#include <atomic>
 #include <cinttypes>
 #include <cstring>
 
@@ -44,11 +51,72 @@ static pakt::AprsTaskContext *g_aprs_ctx = nullptr;
 // watchdog_task calls tick() every 500 ms. Null until aprs_task is ready.
 static pakt::PttWatchdog *g_ptt_watchdog = nullptr;
 
+// ── TX pipeline shared state ──────────────────────────────────────────────────
+//
+// g_radio      – set by radio_task once Sa818Radio::init() succeeds.
+// g_i2s_tx_chan– set by audio_task once the I2S TX channel is enabled.
+// Both are read by aprs_task (afsk_tx_frame).  Written once; no mutex needed.
+static pakt::Sa818Radio  *g_radio        = nullptr;
+static i2s_chan_handle_t  g_i2s_tx_chan  = nullptr;
+
+// PCM output buffer for AFSK modulation (global to avoid stack pressure).
+// Max AX.25 = 330 B → ~22 400 samples at 8 kHz/1200 baud; 25 600 adds margin.
+static constexpr size_t kAfskMaxPcmSamples = 25600;
+static int16_t           g_tx_pcm_buf[kAfskMaxPcmSamples];
+
 // Device config (callsign, ssid, radio settings).
 // NVS backend attached in app_main() after nvs_flash_init().
 // Until then (and if NVS init fails) updates are in-memory only.
 static pakt::DeviceConfigStore g_device_config;
 static pakt::NvsStorage        g_nvs_storage;
+
+// ── Decoded AX.25 RX queue (audio_task → aprs_task) ──────────────────────────
+//
+// audio_task (producer): pushes raw AX.25 frames decoded by the AFSK modem.
+// aprs_task  (consumer): drains the queue each tick; forwards to native BLE
+//                        rx_packet notify and KISS RX notify.
+//
+// Thread model: SPSC — only audio_task writes head_, only aprs_task writes tail_.
+// Depth=8 gives ~8 ms burst buffer at 1 packet/ms (typical APRS is << 1/s).
+namespace {
+
+struct Ax25RxQueue {
+    static constexpr size_t kDepth    = 8;
+    static constexpr size_t kMaxFrame = pakt::kKissMaxFrame;
+
+    struct Entry { uint8_t data[kMaxFrame]; size_t len; };
+
+    Entry  slots[kDepth]{};
+    std::atomic<uint32_t> head_{0};
+    std::atomic<uint32_t> tail_{0};
+
+    // Producer (audio_task context): push a decoded AX.25 frame.
+    bool push(const uint8_t *d, size_t l) {
+        if (!d || l == 0 || l > kMaxFrame) return false;
+        uint32_t h = head_.load(std::memory_order_relaxed);
+        if ((h - tail_.load(std::memory_order_acquire)) >= kDepth) return false;
+        auto &s = slots[h % kDepth];
+        std::memcpy(s.data, d, l);
+        s.len = l;
+        head_.store(h + 1, std::memory_order_release);
+        return true;
+    }
+
+    // Consumer (aprs_task context): pop one frame; returns false if empty.
+    bool pop(uint8_t *out, size_t *out_len) {
+        uint32_t t = tail_.load(std::memory_order_relaxed);
+        if (t == head_.load(std::memory_order_acquire)) return false;
+        const auto &s = slots[t % kDepth];
+        std::memcpy(out, s.data, s.len);
+        *out_len = s.len;
+        tail_.store(t + 1, std::memory_order_release);
+        return true;
+    }
+};
+
+} // anonymous namespace
+
+static Ax25RxQueue g_rx_ax25_queue;
 
 #define PAKT_FIRMWARE_VERSION "0.1.0"
 
@@ -101,7 +169,7 @@ extern "C" void app_main(void)
     xTaskCreate(radio_task,    "radio",    4096, nullptr, 7, nullptr);
     xTaskCreate(watchdog_task, "watchdog", 2048, nullptr, 6, nullptr);
     xTaskCreate(gps_task,      "gps",      4096, nullptr, 5, nullptr);
-    xTaskCreate(aprs_task,     "aprs",     4096, nullptr, 5, nullptr);
+    xTaskCreate(aprs_task,     "aprs",     6144, nullptr, 5, nullptr);
     xTaskCreate(ble_task,      "ble",      8192, nullptr, 4, nullptr);
     xTaskCreate(power_task,    "power",    2048, nullptr, 2, nullptr);
 
@@ -183,34 +251,349 @@ static void radio_task(void *arg)
     // The direct GPIO lambda remains registered until this point to guard init().
     pakt::ptt_register_safe_off([](){ radio.ptt(false); });
 
-    // radio_task's run loop is currently a placeholder.
-    // The transmit path will be wired here in the audio/modem integration step.
+    // Publish Sa818Radio pointer so aprs_task can call afsk_tx_frame().
+    // Written once here; read by aprs_task (single writer, single reader — safe).
+    g_radio = &radio;
+    ESP_LOGI("radio", "radio ready; g_radio published for TX pipeline");
+
+    // radio_task monitor loop: SA818 is now managed by aprs_task TX path.
     for (;;) { vTaskDelay(pdMS_TO_TICKS(1000)); }
+}
+
+// ── SGTL5000 helpers ─────────────────────────────────────────────────────────
+//
+// GPIO assignments (from prototype_breakout_wiring_plan.md):
+//   I2C: SDA=GPIO8, SCL=GPIO9
+//   I2S: MCLK=GPIO4, BCLK=GPIO5, WS=GPIO6, DOUT=GPIO7, DIN=GPIO10
+//
+// SGTL5000 I2C address (7-bit): 0x0A
+// Register protocol: [reg_hi][reg_lo][val_hi][val_lo] (all 16-bit)
+
+static esp_err_t sgtl5000_write(i2c_master_dev_handle_t dev, uint16_t reg, uint16_t val)
+{
+    uint8_t buf[4] = {
+        static_cast<uint8_t>(reg >> 8),
+        static_cast<uint8_t>(reg & 0xFF),
+        static_cast<uint8_t>(val >> 8),
+        static_cast<uint8_t>(val & 0xFF),
+    };
+    return i2c_master_transmit(dev, buf, sizeof(buf), /*timeout_ms=*/10);
+}
+
+// Power-up sequence for both ADC (RX: SA818 AF_OUT → line-in → I2S)
+// and DAC (TX: I2S → DAC → line-out → SA818 AF_IN) paths at 8 kHz.
+//
+// Clock plan (consistent with I2S master MCLK_MULTIPLE_1024 @ 8 kHz):
+//   MCLK = 1024 × 8000 = 8.192 MHz delivered by ESP32-S3 I2S master.
+//   CHIP_CLK_CTRL: SYS_FS=32 kHz (MCLK÷256=32 kHz), RATE_MODE=÷4 → 8 kHz ADC/DAC.
+//   CHIP_CLK_CTRL = (RATE_MODE=2 @ bits[5:4]) | (SYS_FS=0 @ bits[3:2]) | (MCLK_FREQ=0 @ bits[1:0])
+//                 = (2<<4)|(0<<2)|(0<<0) = 0x0020
+//
+// Gain calibration (ADC input level and DAC output level) is a hardware bring-up task.
+// CHIP_ANA_POWER bit layout assumed from SGTL5000 datasheet §6.5:
+//   bit 14: VCOAMP_POWERUP  bit 13: VAG_POWERUP  bit 12: ADC_MONO
+//   bit 11: REFTOP_POWERUP  bit 9: DAC_POWERUP   bit 7: ADC_POWERUP
+//   bit 6: LINEOUT_POWERUP  bit 5: LINEOUT_MONO
+// Verify every bit against datasheet before first power-on.
+static bool sgtl5000_init(i2c_master_dev_handle_t dev)
+{
+    // 1. Partial analog power-up: VCOAMP (bias) only.
+    //    Full power-up in step 8 after digital blocks are configured.
+    if (sgtl5000_write(dev, 0x0030, 0x40A0) != ESP_OK) return false;
+    vTaskDelay(pdMS_TO_TICKS(10));   // allow VCOAMP/VAG to ramp
+
+    // 2. Reference voltages (VAG=1.575 V, bias nominal).
+    if (sgtl5000_write(dev, 0x0028, 0x01F2) != ESP_OK) return false;
+
+    // 3. Line-out control: output level and bias for SA818 AF_IN.
+    if (sgtl5000_write(dev, 0x002C, 0x0F22) != ESP_OK) return false;
+
+    // 4. Short-circuit protection.
+    if (sgtl5000_write(dev, 0x003C, 0x1106) != ESP_OK) return false;
+
+    // 5. Linear regulator: default.
+    if (sgtl5000_write(dev, 0x0026, 0x006C) != ESP_OK) return false;
+
+    // 6. Digital power: I2S_IN + I2S_OUT + ADC + DAC + DAP all on.
+    //    0x0073 = bit6(ADC)+bit5(DAC)+bit4(DAP)+bit1(I2S_IN)+bit0(I2S_OUT)
+    if (sgtl5000_write(dev, 0x0002, 0x0073) != ESP_OK) return false;
+
+    // 7. Clock: SYS_FS=32 kHz (bits[3:2]=0), RATE_MODE=÷4 (bits[5:4]=2),
+    //    MCLK_FREQ=256×SYS_FS (bits[1:0]=0) → effective rate = 32000/4 = 8000 Hz.
+    //    MCLK input = 256 × 32000 = 8.192 MHz, matching I2S MCLK_MULTIPLE_1024 × 8 kHz.
+    //    CHIP_CLK_CTRL = (2<<4)|(0<<2)|(0<<0) = 0x0020
+    if (sgtl5000_write(dev, 0x0004, 0x0020) != ESP_OK) return false;
+
+    // 8. I2S: slave mode (bit8=0), 16-bit (DLEN=3→bits[4:2]=0xC), I2S/Philips (MODE=0).
+    //    CHIP_I2S_CTRL = 0x000C
+    if (sgtl5000_write(dev, 0x0006, 0x000C) != ESP_OK) return false;
+
+    // 9. Signal routing (CHIP_SSS_CTRL 0x000A):
+    //    bits[13:12] DAC_SELECT=1  → I2S_IN  data feeds DAC (TX path: ESP→SA818).
+    //    bits[1:0]   I2S_SELECT=0  → ADC     data goes to I2S output (RX path: SA818→ESP).
+    //    0x1000 = (1<<12) | (0<<0)
+    if (sgtl5000_write(dev, 0x000A, 0x1000) != ESP_OK) return false;
+
+    // 10. ADC/DAC control: HPF active on ADC, no mute on ADC or DAC.
+    if (sgtl5000_write(dev, 0x000E, 0x0000) != ESP_OK) return false;
+
+    // 11. Analog control (CHIP_ANA_CTRL 0x0024):
+    //    bit8 MUTE_HP=1  (headphone unused; muted for safety)
+    //    bit4 MUTE_LO=0  (line-out ACTIVE — needed for AFSK TX to SA818 AF_IN)
+    //    bit2 SELECT_ADC=1  (line-in selected as ADC source, not microphone)
+    //    0x0104 = (1<<8) | (0<<4) | (1<<2)
+    if (sgtl5000_write(dev, 0x0024, 0x0104) != ESP_OK) return false;
+
+    // 12. ADC volume: 0 dB starting point (tune during bring-up via BLE config).
+    if (sgtl5000_write(dev, 0x0020, 0x0000) != ESP_OK) return false;
+
+    // 13. DAC volume: 0 dB both channels (0x3C3C per datasheet 0 dB setting).
+    //    Tune during bring-up for correct SA818 input deviation.
+    if (sgtl5000_write(dev, 0x0010, 0x3C3C) != ESP_OK) return false;
+
+    // 14. Full analog power-up: add ADC (bit7), DAC (bit9), LINEOUT (bit6).
+    //    0x42A0 = 0x40A0 | (1<<9,DAC) | (1<<6,LINEOUT)  [bit7 ADC already in 0x40A0]
+    //    Note: exact bit positions for DAC/LINEOUT must be verified against datasheet.
+    if (sgtl5000_write(dev, 0x0030, 0x42E0) != ESP_OK) return false;
+    vTaskDelay(pdMS_TO_TICKS(5));
+
+    ESP_LOGI("audio", "SGTL5000 init: 8 kHz, ADC=line-in, DAC=line-out, MCLK=8.192 MHz");
+    return true;
+}
+
+// ── Audio pipeline ────────────────────────────────────────────────────────────
+//
+// Called once by audio_task. Returns only on unrecoverable init failure.
+// On success, enters the per-sample run loop and never returns.
+
+static void audio_pipeline_run()
+{
+    static constexpr uint32_t kSampleRateHz  = 8000;
+    static constexpr size_t   kDmaFrames     = 256;   // ~32 ms at 8 kHz
+
+    // ── I2C master bus ────────────────────────────────────────────────────────
+    i2c_master_bus_handle_t i2c_bus = nullptr;
+    {
+        i2c_master_bus_config_t cfg = {};
+        cfg.i2c_port            = I2C_NUM_0;
+        cfg.sda_io_num          = GPIO_NUM_8;
+        cfg.scl_io_num          = GPIO_NUM_9;
+        cfg.clk_source          = I2C_CLK_SRC_DEFAULT;
+        cfg.glitch_ignore_cnt   = 7;
+        cfg.flags.enable_internal_pullup = false;
+        if (i2c_new_master_bus(&cfg, &i2c_bus) != ESP_OK) {
+            ESP_LOGE("audio", "I2C master bus init failed");
+            return;
+        }
+    }
+
+    // ── SGTL5000 I2C device ───────────────────────────────────────────────────
+    i2c_master_dev_handle_t sgtl_dev = nullptr;
+    {
+        i2c_device_config_t cfg = {};
+        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        cfg.device_address  = 0x0A;
+        cfg.scl_speed_hz    = 400000;
+        if (i2c_master_bus_add_device(i2c_bus, &cfg, &sgtl_dev) != ESP_OK) {
+            ESP_LOGE("audio", "SGTL5000 I2C device add failed");
+            return;
+        }
+    }
+
+    if (!sgtl5000_init(sgtl_dev)) {
+        ESP_LOGE("audio", "SGTL5000 init failed – check I2C wiring");
+        return;
+    }
+
+    // ── I2S full-duplex channel (ESP32-S3 master, SGTL5000 slave) ────────────
+    // Both TX (AFSK modulator → DAC → SA818 AF_IN) and RX (SA818 AF_OUT → ADC → demod)
+    // share the same I2S port so they use one coherent MCLK/BCLK/WS.
+    //
+    // MCLK plan: MCLK_MULTIPLE_1024 × 8000 Hz = 8.192 MHz.
+    //   SGTL5000 CHIP_CLK_CTRL uses 256 × SYS_FS (32 kHz) = 8.192 MHz → ADC/DAC = 8 kHz.
+    //   BCLK = 8000 × 2 ch × 16 bit = 256 kHz; MCLK/BCLK = 32 (integer, no jitter).
+    i2s_chan_handle_t tx_chan = nullptr;
+    i2s_chan_handle_t rx_chan = nullptr;
+    {
+        i2s_chan_config_t cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+        cfg.dma_desc_num  = 4;
+        cfg.dma_frame_num = kDmaFrames;
+        if (i2s_new_channel(&cfg, &tx_chan, &rx_chan) != ESP_OK) {
+            ESP_LOGE("audio", "I2S channel create failed");
+            return;
+        }
+    }
+
+    {
+        i2s_std_config_t cfg      = {};
+        cfg.clk_cfg               = I2S_STD_CLK_DEFAULT_CONFIG(kSampleRateHz);
+        // MCLK = 1024 × 8 kHz = 8.192 MHz — matches SGTL5000 CLK_CTRL (SYS_FS=32kHz, 256×).
+        cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_1024;
+        cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
+            I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
+        cfg.gpio_cfg.mclk = GPIO_NUM_4;
+        cfg.gpio_cfg.bclk = GPIO_NUM_5;
+        cfg.gpio_cfg.ws   = GPIO_NUM_6;
+        cfg.gpio_cfg.dout = GPIO_NUM_7;   // ESP → codec DAC (AFSK TX path)
+        cfg.gpio_cfg.din  = GPIO_NUM_10;  // codec ADC → ESP (AFSK RX path)
+
+        // Configure both channels with the same clock/GPIO settings.
+        // TX channel uses dout; RX channel uses din; both share mclk/bclk/ws.
+        if (i2s_channel_init_std_mode(tx_chan, &cfg) != ESP_OK) {
+            ESP_LOGE("audio", "I2S TX std mode init failed");
+            return;
+        }
+        if (i2s_channel_init_std_mode(rx_chan, &cfg) != ESP_OK) {
+            ESP_LOGE("audio", "I2S RX std mode init failed");
+            return;
+        }
+    }
+
+    if (i2s_channel_enable(tx_chan) != ESP_OK) {
+        ESP_LOGE("audio", "I2S TX channel enable failed");
+        return;
+    }
+    if (i2s_channel_enable(rx_chan) != ESP_OK) {
+        ESP_LOGE("audio", "I2S RX channel enable failed");
+        return;
+    }
+
+    // Publish TX handle so aprs_task can call afsk_tx_frame().
+    g_i2s_tx_chan = tx_chan;
+
+    // ── AfskDemodulator + sample loop ─────────────────────────────────────────
+    // The demodulator callback runs in this task context (no RTOS crossing needed).
+    pakt::AfskDemodulator demod(kSampleRateHz,
+        [](const uint8_t *frame, size_t len) {
+            if (!g_rx_ax25_queue.push(frame, len)) {
+                ESP_LOGW("audio", "RX AX.25 queue full – frame dropped");
+            }
+        });
+
+    static int16_t rx_buf[kDmaFrames];
+
+    ESP_LOGI("audio", "RX pipeline running: SGTL5000 + AfskDemodulator @ %u Hz",
+             static_cast<unsigned>(kSampleRateHz));
+
+    for (;;) {
+        size_t bytes_read = 0;
+        esp_err_t err = i2s_channel_read(rx_chan, rx_buf, sizeof(rx_buf),
+                                         &bytes_read, pdMS_TO_TICKS(50));
+        if (err == ESP_OK && bytes_read > 0) {
+            demod.process(rx_buf, bytes_read / sizeof(int16_t));
+        } else if (err != ESP_ERR_TIMEOUT) {
+            ESP_LOGW("audio", "I2S read error: %s", esp_err_to_name(err));
+        }
+    }
+}
+
+// ── AFSK TX pipeline ──────────────────────────────────────────────────────────
+//
+// Transmit a raw AX.25 frame as Bell 202 AFSK audio via I2S → SGTL5000 DAC → SA818.
+// Called only from aprs_task context (single consumer, no mutex needed).
+// Returns false if radio or audio pipeline is not yet initialised (hardware blocked).
+static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
+{
+    if (!g_radio || !g_i2s_tx_chan) {
+        ESP_LOGW("aprs", "afsk_tx: pipeline not ready (radio=%s i2s=%s)",
+                 g_radio       ? "ok" : "null",
+                 g_i2s_tx_chan ? "ok" : "null");
+        return false;
+    }
+
+    pakt::AfskModulator mod(8000);
+    size_t n_samples = mod.modulate_frame(ax25, len,
+                                          g_tx_pcm_buf, kAfskMaxPcmSamples);
+    if (n_samples == 0) {
+        ESP_LOGE("aprs", "afsk_tx: modulation failed (ax25_len=%u, buf=%u)",
+                 static_cast<unsigned>(len),
+                 static_cast<unsigned>(kAfskMaxPcmSamples));
+        return false;
+    }
+
+    if (!g_radio->ptt(true)) {
+        ESP_LOGE("aprs", "afsk_tx: PTT assert failed");
+        return false;
+    }
+
+    // SA818 TX path ramp-up: allow PA and squelch to settle.
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    size_t   bytes_written = 0;
+    // Timeout = audio duration + 500 ms margin.
+    uint32_t timeout_ms = static_cast<uint32_t>(n_samples * 1000u / 8000u) + 500u;
+    esp_err_t err = i2s_channel_write(g_i2s_tx_chan,
+                                      g_tx_pcm_buf,
+                                      n_samples * sizeof(int16_t),
+                                      &bytes_written,
+                                      pdMS_TO_TICKS(timeout_ms));
+    if (err != ESP_OK) {
+        ESP_LOGE("aprs", "afsk_tx: I2S write error: %s", esp_err_to_name(err));
+    }
+
+    // Wait for DMA to drain (4 descs × 256 frames / 8000 Hz ≈ 128 ms).
+    vTaskDelay(pdMS_TO_TICKS(150));
+
+    g_radio->ptt(false);
+
+    bool ok = (err == ESP_OK) && (bytes_written == n_samples * sizeof(int16_t));
+    ESP_LOGI("aprs", "afsk_tx: %s (%u samples, %u ms)",
+             ok ? "ok" : "FAIL",
+             static_cast<unsigned>(n_samples),
+             static_cast<unsigned>(n_samples * 1000u / 8000u));
+    return ok;
 }
 
 static void audio_task(void *arg)
 {
-    // Step 2: SGTL5000 I2S driver + AFSK modem pipeline
-    ESP_LOGI("audio", "task started (stub)");
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(10)); }
+    audio_pipeline_run();
+    // audio_pipeline_run() returns only on init failure.
+    ESP_LOGE("audio", "audio pipeline failed to start; task idle");
+    for (;;) { vTaskDelay(pdMS_TO_TICKS(1000)); }
 }
 
 static void aprs_task(void *arg)
 {
-    // Step 3: AX.25 framing + APRS encode/decode + TX retry FSM
+    // Step 3 + Step 7: AX.25/APRS framing + TX retry FSM + AFSK TX pipeline.
     //
-    // AprsTaskContext owns TxScheduler and the BLE→scheduler ring buffer.
-    // TODO(hardware): replace the stub RadioTxFn with the real AX.25/AFSK path.
-
+    // RadioTxFn: encodes APRS message → AX.25 → AFSK → I2S → SA818.
+    // RawTxFn:   KISS AX.25 bytes → AFSK → I2S → SA818 (no retry).
+    // Both call afsk_tx_frame(); returns false gracefully if radio/audio not ready.
     static constexpr uint32_t kTickMs = 1000;  // scheduler tick period
 
     static pakt::AprsTaskContext ctx(
-        // RadioTxFn stub – returns true so scheduler advances state.
-        // Replace with: encode APRS frame, push to audio/modem pipeline.
+        // RadioTxFn: encode APRS message → AX.25 UI frame → AFSK → I2S → SA818.
+        // Returns false if radio or audio pipeline not yet ready (graceful degrade).
         [](const pakt::TxMessage &msg) -> bool {
-            ESP_LOGI("aprs", "TX stub: dest=%s msg_id=%s text=%.20s",
-                     msg.dest_callsign, msg.aprs_msg_id, msg.text);
-            return true;
+            // Build APRS information field: ":DEST     :text{msg_id}"
+            uint8_t info_buf[pakt::ax25::kMaxInfoLen];
+            size_t  info_len = pakt::aprs::encode_message(
+                msg.dest_callsign, msg.dest_ssid,
+                msg.text, msg.aprs_msg_id,
+                info_buf, sizeof(info_buf));
+            if (info_len == 0) {
+                ESP_LOGW("aprs", "APRS encode_message failed (dest=%s)", msg.dest_callsign);
+                return false;
+            }
+
+            // Build AX.25 UI frame (dest=APZPKT tocall, src=device callsign).
+            const auto &cfg_vals = g_device_config.config();
+            pakt::ax25::Frame frame = pakt::aprs::make_ui_frame(
+                cfg_vals.callsign, cfg_vals.ssid);
+            std::memcpy(frame.info, info_buf, info_len);
+            frame.info_len = info_len;
+
+            uint8_t ax25_buf[pakt::ax25::kMaxEncodedLen];
+            size_t  ax25_len = pakt::ax25::encode(frame, ax25_buf, sizeof(ax25_buf));
+            if (ax25_len == 0) {
+                ESP_LOGW("aprs", "ax25::encode failed");
+                return false;
+            }
+
+            ESP_LOGI("aprs", "APRS TX: %s→%s id=%s len=%u",
+                     cfg_vals.callsign, msg.dest_callsign,
+                     msg.aprs_msg_id, static_cast<unsigned>(ax25_len));
+            return afsk_tx_frame(ax25_buf, ax25_len);
         },
         // NotifyFn: encode result JSON and push BLE notify.
         [](const char *msg_id, pakt::TxResultEvent event) {
@@ -239,6 +622,13 @@ static void aprs_task(void *arg)
         pakt::PttWatchdog::kDefaultTimeoutMs
     );
 
+    // KISS raw TX: raw AX.25 bytes from BLE client → AFSK → I2S → SA818.
+    // No APRS retry; KISS is a raw pipe (TNC mode 0).
+    ctx.set_raw_tx_fn([](const uint8_t *ax25, size_t len) -> bool {
+        ESP_LOGI("aprs", "KISS raw TX: %u AX.25 bytes → AFSK", static_cast<unsigned>(len));
+        return afsk_tx_frame(ax25, len);
+    });
+
     // Publish both pointers before entering the run loop.
     g_aprs_ctx     = &ctx;
     g_ptt_watchdog = &watchdog;
@@ -251,6 +641,30 @@ static void aprs_task(void *arg)
             static_cast<uint32_t>(esp_timer_get_time() / 1000);
         ctx.tick(now_ms);
         watchdog.heartbeat(now_ms);   // signal aprs_task is alive
+
+        // Drain decoded AX.25 frames pushed by audio_task and forward to BLE clients.
+        // Producer call site: audio_task's TODO comment above (FW-004 + FW-006).
+        // Until the audio pipeline is wired this queue is always empty (safe no-op).
+        {
+            uint8_t ax25_frame[pakt::kKissMaxFrame];
+            size_t  ax25_len = 0;
+            while (g_rx_ax25_queue.pop(ax25_frame, &ax25_len)) {
+                // 1. Native rx_packet notify (PAKT BLE clients, e.g. desktop app)
+                pakt::BleServer::instance().notify_rx_packet(ax25_frame, ax25_len);
+
+                // 2. KISS RX notify (KISS TNC clients, e.g. APRSdroid / Xastir)
+                //    KissFramer::encode adds FEND delimiters and byte-escaping.
+                //    notify_kiss_rx applies INT-002 chunking (spec §3.2).
+                uint8_t kiss_buf[pakt::kKissMaxFrame * 2 + 4];
+                int kiss_len = pakt::KissFramer::encode(
+                    ax25_frame, ax25_len, kiss_buf, sizeof(kiss_buf));
+                if (kiss_len > 0) {
+                    pakt::BleServer::instance().notify_kiss_rx(
+                        kiss_buf, static_cast<size_t>(kiss_len));
+                }
+            }
+        }
+
         vTaskDelay(pdMS_TO_TICKS(kTickMs));
     }
 }
@@ -378,6 +792,34 @@ static void ble_task(void *arg)
     handlers.on_caps_read = [](uint8_t *buf, size_t max) -> size_t {
         auto caps = pakt::DeviceCapabilities::mvp_defaults();
         return caps.to_json(reinterpret_cast<char *>(buf), max);
+    };
+    handlers.on_kiss_tx = [](const uint8_t *data, size_t len) -> bool {
+        // Decode the inbound KISS frame into raw AX.25 bytes.
+        uint8_t ax25_buf[pakt::kKissMaxFrame];
+        uint8_t cmd = 0;
+        int ax25_len = pakt::KissFramer::decode(
+            data, len, ax25_buf, sizeof(ax25_buf), &cmd);
+        if (ax25_len < 0) {
+            ESP_LOGW("ble", "KISS TX: malformed frame (len=%u)", (unsigned)len);
+            return false;
+        }
+        if (ax25_len == 0) {
+            // Non-data frame (e.g. 0x0F return-from-KISS): valid, no-op in MVP.
+            ESP_LOGI("ble", "KISS TX: non-data frame cmd=0x%02X (no-op)", cmd);
+            return true;
+        }
+        // Data frame: push raw AX.25 to the shared TX ring consumed by aprs_task.
+        // aprs_task drains via set_raw_tx_fn (stub → real AFSK pipeline on hardware).
+        if (!g_aprs_ctx) {
+            ESP_LOGW("ble", "KISS TX: aprs_task not ready, dropping %d-byte frame", ax25_len);
+            return false;
+        }
+        if (!g_aprs_ctx->push_kiss_ax25(ax25_buf, static_cast<size_t>(ax25_len))) {
+            ESP_LOGW("ble", "KISS TX: TX queue full, dropping %d-byte frame", ax25_len);
+            return false;
+        }
+        ESP_LOGD("ble", "KISS TX: enqueued %d AX.25 bytes", ax25_len);
+        return true;
     };
 
     if (!pakt::BleServer::instance().init(handlers, "PAKT-TNC")) {

@@ -58,6 +58,8 @@ set(SA818_INCLUDE    "${COMP}/radio_sa818/include")
 set(SA818_SRC        "${COMP}/radio_sa818/Sa818CommandFormatter.cpp"
                      "${COMP}/radio_sa818/Sa818ResponseParser.cpp"
                      "${COMP}/radio_sa818/Sa818Radio.cpp")
+set(KISS_INCLUDE     "${COMP}/kiss/include")
+set(KISS_SRC         "${COMP}/kiss/KissFramer.cpp")
 
 # ── Test executable ───────────────────────────────────────────────────────────
 add_executable(pakt_tests
@@ -76,6 +78,7 @@ add_executable(pakt_tests
     test_ptt_watchdog.cpp
     test_config_store.cpp
     test_sa818.cpp
+    test_kiss_framer.cpp
     # Component sources compiled directly (no ESP-IDF build system needed)
     ${AX25_SRC}
     ${APRS_SRC}
@@ -89,6 +92,7 @@ add_executable(pakt_tests
     ${CODEC_SRC}
     ${WATCHDOG_SRC}
     ${SA818_SRC}
+    ${KISS_SRC}
 )
 
 target_include_directories(pakt_tests PRIVATE
@@ -105,7 +109,9 @@ target_include_directories(pakt_tests PRIVATE
     ${CODEC_INCLUDE}
     ${WATCHDOG_INCLUDE}
     ${SA818_INCLUDE}
-    ${doctest_SOURCE_DIR}/doctest      # provides <doctest/doctest.h>
+    ${KISS_INCLUDE}
+    ${doctest_SOURCE_DIR}              # provides <doctest/doctest.h>
+    ${doctest_SOURCE_DIR}/doctest      # provides <doctest.h> (fallback)
 )
 
 target_compile_options(pakt_tests PRIVATE

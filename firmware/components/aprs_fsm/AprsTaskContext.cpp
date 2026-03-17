@@ -27,6 +27,28 @@ AprsTaskContext::AprsTaskContext(RadioTxFn radio_tx, NotifyFn notify)
     )
 {}
 
+bool AprsTaskContext::push_kiss_ax25(const uint8_t *ax25, size_t len)
+{
+    if (!ax25 || len == 0 || len > kKissMaxAx25) return false;
+
+    // SPSC ring: only producer updates kiss_head_.
+    uint32_t h = kiss_head_.load(std::memory_order_relaxed);
+    uint32_t t = kiss_tail_.load(std::memory_order_acquire);
+    if ((h - t) >= static_cast<uint32_t>(kKissRingDepth)) {
+        return false;  // ring full
+    }
+    auto &e = kiss_ring_[h % kKissRingDepth];
+    std::memcpy(e.data, ax25, len);
+    e.len = len;
+    kiss_head_.store(h + 1, std::memory_order_release);
+    return true;
+}
+
+void AprsTaskContext::set_raw_tx_fn(RawTxFn fn)
+{
+    raw_tx_fn_ = std::move(fn);
+}
+
 bool AprsTaskContext::push_tx_request(const TxRequestFields &req)
 {
     // SPSC ring buffer: only producer updates head_.
@@ -62,6 +84,20 @@ void AprsTaskContext::tick(uint32_t now_ms)
     }
 
     scheduler_.tick(now_ms);
+
+    // Drain KISS TX raw AX.25 ring.
+    // KISS is a raw pipe: no retry, no result notify — just transmit and forget.
+    {
+        uint32_t t = kiss_tail_.load(std::memory_order_relaxed);
+        const uint32_t h = kiss_head_.load(std::memory_order_acquire);
+        while (t != h) {
+            const KissRawEntry &e = kiss_ring_[t % kKissRingDepth];
+            if (raw_tx_fn_) {
+                raw_tx_fn_(e.data, e.len);
+            }
+            kiss_tail_.store(++t, std::memory_order_release);
+        }
+    }
 }
 
 bool AprsTaskContext::notify_ack(const char *ack_msg_id)

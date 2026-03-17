@@ -56,5 +56,5 @@ jobs:
 
       - name: Run app tests
         working-directory: app/desktop_test
-        run: pytest test_chunker.py test_app.py test_messaging.py test_telemetry_app.py test_capability.py -v --tb=short
+        run: pytest test_chunker.py test_app.py test_messaging.py test_telemetry_app.py test_capability.py test_kiss_bridge.py -v --tb=short
 

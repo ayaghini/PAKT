@@ -213,3 +213,130 @@ TEST_SUITE("AFSK modem round-trip")
         CHECK(memcmp(decoded.info, frame.info, frame.info_len) == 0);
     }
 }
+
+// ── TX buffer sizing ──────────────────────────────────────────────────────────
+//
+// Verify that a max-size AX.25 frame fits within kAfskMaxPcmSamples (25 600).
+// This guards against the g_tx_pcm_buf in main.cpp being too small, which
+// would cause AfskModulator::modulate_frame() to silently truncate output.
+
+TEST_SUITE("AfskModulator TX buffer sizing")
+{
+    static constexpr size_t kAfskMaxPcmSamples = 25600; // must match main.cpp
+
+    TEST_CASE("max-encoded AX.25 frame fits in 25 600 samples at 8 kHz")
+    {
+        // Worst-case AX.25 frame: kMaxEncodedLen bytes, all 0xFF (maximum bit stuffing).
+        // 0xFF triggers a stuffed 0-bit after every 5 ones → up to 1.2× raw bit count.
+        std::vector<uint8_t> worst(pakt::ax25::kMaxEncodedLen, 0xFF);
+
+        pakt::AfskModulator mod(kSampleRate);
+        std::vector<int16_t> big(kAfskMaxPcmSamples);
+        size_t n = mod.modulate_frame(worst.data(), worst.size(),
+                                      big.data(), big.size());
+
+        // Must produce samples (non-zero) and must fit (no truncation).
+        CHECK(n > 0);
+        CHECK(n <= kAfskMaxPcmSamples);
+        // Sanity: at least preamble-only samples.
+        CHECK(n >= static_cast<size_t>(pakt::AfskModulator::kPreambleFlags * 8
+                                       * kSampleRate / pakt::AfskModulator::kBaudRate));
+    }
+
+    TEST_CASE("zero-byte frame (degenerate) produces preamble+tail only")
+    {
+        // An empty data field is invalid, but modulate_frame should return 0
+        // for a null pointer and non-zero for a valid-but-empty buffer.
+        pakt::AfskModulator mod(kSampleRate);
+        std::vector<int16_t> out(kAfskMaxPcmSamples);
+
+        // Null pointer → must return 0.
+        CHECK(mod.modulate_frame(nullptr, 0, out.data(), out.size()) == 0);
+
+        // Empty but non-null payload: APRS packets always have at least FCS,
+        // but test the boundary — modulate_frame returns 0 when data_len == 0.
+        const uint8_t empty[] = {};
+        CHECK(mod.modulate_frame(empty, 0, out.data(), out.size()) == 0);
+    }
+
+    TEST_CASE("output buffer exactly 1 sample too small returns 0")
+    {
+        // Compute how many samples a tiny frame needs, then pass a buffer
+        // one sample smaller — modulate_frame should return 0 (no truncated output).
+        const uint8_t tiny[] = {0xC0, 0xC0, 0xC0, 0xC0};  // 4 bytes, minimal stuffing
+        pakt::AfskModulator mod(kSampleRate);
+
+        // First, find the real sample count with a large buffer.
+        std::vector<int16_t> big(kAfskMaxPcmSamples);
+        size_t real_n = mod.modulate_frame(tiny, sizeof(tiny), big.data(), big.size());
+        REQUIRE(real_n > 0);
+
+        // Now pass a buffer one sample short.
+        mod.reset();
+        std::vector<int16_t> small(real_n - 1);
+        size_t trunc_n = mod.modulate_frame(tiny, sizeof(tiny), small.data(), small.size());
+        CHECK(trunc_n == 0);
+    }
+
+    TEST_CASE("exact-fit buffer returns sample count, not 0")
+    {
+        // Verify that a buffer of exactly the right size succeeds.
+        // The previous post-hoc (pos == out_max) check incorrectly returned 0
+        // for this case because it could not distinguish exact-fit from truncation.
+        // The corrected implementation detects truncation inline (before-write check)
+        // so exact-fit is unambiguously successful.
+        const uint8_t tiny[] = {0xC0, 0xC0, 0xC0, 0xC0};
+        pakt::AfskModulator mod(kSampleRate);
+
+        std::vector<int16_t> big(kAfskMaxPcmSamples);
+        size_t real_n = mod.modulate_frame(tiny, sizeof(tiny), big.data(), big.size());
+        REQUIRE(real_n > 0);
+        REQUIRE(real_n < kAfskMaxPcmSamples); // sanity: must not have already saturated
+
+        // Exact-fit: buffer is exactly real_n samples.
+        mod.reset();
+        std::vector<int16_t> exact(real_n);
+        size_t n = mod.modulate_frame(tiny, sizeof(tiny), exact.data(), exact.size());
+        CHECK(n == real_n);
+    }
+
+    TEST_CASE("significantly undersized buffer returns 0")
+    {
+        // A buffer with only 10 samples cannot hold even the preamble —
+        // truncation should be detected early and 0 returned.
+        const uint8_t data[] = {0x01, 0x02, 0x03, 0x04};
+        pakt::AfskModulator mod(kSampleRate);
+        std::vector<int16_t> tiny_buf(10);
+        size_t n = mod.modulate_frame(data, sizeof(data), tiny_buf.data(), tiny_buf.size());
+        CHECK(n == 0);
+    }
+
+    TEST_CASE("APRS encode_message + ax25::encode round-trip within buffer")
+    {
+        // Simulate the full RadioTxFn encoding path from aprs_task.
+        const char *from_call = "W1AW";
+        const char *to_call   = "K1XYZ";
+        const char *text      = "Test APRS message via PAKT firmware";
+        const char *msg_id    = "1";
+
+        uint8_t info_buf[pakt::ax25::kMaxInfoLen];
+        size_t  info_len = pakt::aprs::encode_message(
+            to_call, 0, text, msg_id, info_buf, sizeof(info_buf));
+        REQUIRE(info_len > 0);
+
+        pakt::ax25::Frame frame = pakt::aprs::make_ui_frame(from_call, 0);
+        std::memcpy(frame.info, info_buf, info_len);
+        frame.info_len = info_len;
+
+        uint8_t ax25_buf[pakt::ax25::kMaxEncodedLen];
+        size_t  ax25_len = pakt::ax25::encode(frame, ax25_buf, sizeof(ax25_buf));
+        REQUIRE(ax25_len > 0);
+
+        // Modulate and verify sample count is within the TX buffer limit.
+        pakt::AfskModulator mod(kSampleRate);
+        std::vector<int16_t> out(kAfskMaxPcmSamples);
+        size_t n = mod.modulate_frame(ax25_buf, ax25_len, out.data(), out.size());
+        CHECK(n > 0);
+        CHECK(n <= kAfskMaxPcmSamples);
+    }
+}

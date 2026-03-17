@@ -1,9 +1,10 @@
 // BleServer – NimBLE GATT server for PAKT APRS TNC (FW-011, FW-012)
 //
-// Exposes three BLE services:
+// Exposes four BLE services:
 //   0x180A  Device Information Service (standard)
 //   0xA000  APRS Service (config, command, status, RX stream, TX request/result)
 //   0xA020  Device Telemetry Service (GPS, power, system)
+//   0xA050  KISS Service (KISS RX notify, KISS TX write — INT-003)
 //
 // Write security policy (architecture contract B):
 //   Device Config, Device Command, and TX Request require an encrypted + bonded link.
@@ -56,6 +57,12 @@ public:
         // Called on a Device Capabilities read; fill `buf` with UTF-8 JSON, return byte count.
         // Read-only, no security restriction.  If null, returns an empty object.
         std::function<size_t(uint8_t *buf, size_t max_len)> on_caps_read;
+
+        // Called after a fully-reassembled KISS TX write (encrypted + bonded, INT-003).
+        // `data` is the raw reassembled KISS frame bytes (may include FEND delimiters).
+        // Return true to accept the frame, false to respond with an application error.
+        // If null, KISS TX writes are silently dropped (no error returned to client).
+        std::function<bool(const uint8_t *data, size_t len)> on_kiss_tx;
     };
 
     static BleServer &instance();
@@ -78,6 +85,11 @@ public:
     bool notify_gps         (const uint8_t *data, size_t len);
     bool notify_power       (const uint8_t *data, size_t len);
     bool notify_system      (const uint8_t *data, size_t len);
+
+    // Send a KISS-framed AX.25 frame to subscribed KISS RX clients (INT-003).
+    // `data` must be a complete KISS frame (FEND-delimited, escaped).
+    // Returns true if the notification was sent.
+    bool notify_kiss_rx     (const uint8_t *data, size_t len);
 
     bool is_connected() const;
     bool is_bonded()    const;
@@ -104,6 +116,8 @@ private:
     uint16_t h_gps_telem_     = 0;
     uint16_t h_power_telem_   = 0;
     uint16_t h_system_telem_  = 0;
+    uint16_t h_kiss_rx_       = 0;   // KISS RX notify handle (INT-003)
+    uint16_t h_kiss_tx_       = 0;   // KISS TX write handle (INT-003)
 
     // Rate-limit: last notify timestamp per characteristic (esp_timer_get_time µs).
     int64_t last_notify_status_   = 0;
@@ -112,6 +126,10 @@ private:
     int64_t last_notify_gps_      = 0;
     int64_t last_notify_power_    = 0;
     int64_t last_notify_system_   = 0;
+    int64_t last_notify_kiss_rx_  = 0;
+
+    // Rolling msg_id counter for INT-002 chunking of KISS RX notifies.
+    uint8_t kiss_rx_msg_id_       = 0;
 
     // Internal helpers (implemented in BleServer.cpp, ESP-IDF only).
     void on_sync_();

@@ -1,8 +1,8 @@
 # PAKT APRS Pocket TNC — Interoperability Matrix (DOC-004)
 
-Status: **DRAFT** — hardware validation and field testing required before final publication.
-Version: 0.1
-Date: 2026-03-09
+Status: **DRAFT** — software readiness is high; hardware validation and field testing are still required before final publication.
+Version: 0.2
+Date: 2026-03-16
 
 ---
 
@@ -47,7 +47,7 @@ Validation status codes:
 
 ## 3. Mobile client compatibility
 
-### 3.1 Android (native PAKT protocol — post-MVP app)
+### 3.1 Android (native PAKT protocol)
 
 | Platform | BLE version | Status | Notes |
 |---|---|---|---|
@@ -55,7 +55,7 @@ Validation status codes:
 | Android 10–11 (API 29–30) | BLE 4.2+ | `untested` | LE SC supported; MTU negotiation behaviour varies by OEM |
 | Android < 10 | BLE 4.x | `incompatible` | LE Secure Connections unreliable below Android 10 |
 
-### 3.2 iOS (native PAKT protocol — post-MVP app)
+### 3.2 iOS (native PAKT protocol)
 
 | Platform | BLE version | Status | Notes |
 |---|---|---|---|
@@ -65,9 +65,9 @@ Validation status codes:
 
 ---
 
-## 4. KISS-over-BLE bridge compatibility (post-MVP, M3)
+## 4. KISS-over-BLE compatibility (MVP)
 
-The KISS-over-BLE profile (INT-003, `docs/16_kiss_over_ble_spec.md`) enables use with existing KISS-speaking APRS software via a serial bridge app.
+The KISS-over-BLE profile (INT-003, `docs/16_kiss_over_ble_spec.md`) is part of MVP and enables use with existing KISS-speaking APRS software either directly or via a thin bridge utility where needed.
 
 | APRS Software | Platform | KISS mode | Status | Notes |
 |---|---|---|---|---|
@@ -119,7 +119,7 @@ Chunk reassembly with duplicate and out-of-order frames is validated in host uni
 | LE SC not available on Android < 10 | Android | Minimum supported Android is 10 |
 | BLE audio bridge latency (HF variant) | All | HF audio latency not measured; subject to Step 11 / HF discovery track findings |
 | No OTA firmware update (MVP) | All | Firmware update requires USB-C cable and `idf.py flash` |
-| KISS profile not yet implemented | All | Deferred to M3; use native PAKT protocol for MVP |
+| KISS third-party validation not yet complete | All | Firmware/software path is implemented; validate with APRSdroid, YAAC, Xastir, or Direwolf during hardware bring-up |
 
 ---
 
@@ -133,5 +133,7 @@ Chunk reassembly with duplicate and out-of-order frames is validated in host uni
 - [ ] Android test device paired and config write confirmed
 - [ ] iOS test device paired and config write confirmed
 - [ ] macOS test confirmed
+- [ ] KISS TX validated with at least one reference third-party client or bridge
+- [ ] KISS RX validated with at least one reference third-party client or bridge
 - [ ] North America 144.390 MHz beacon decode confirmed by reference TNC
 - [ ] Europe 144.800 MHz frequency set and confirmed

@@ -21,6 +21,7 @@
    - BLE GATT services
    - Windows desktop BLE test client (development and bench validation)
    - Phone BLE client (user-facing workflow)
+   - KISS-over-BLE service for third-party APRS software
    - Optional Wi-Fi (later) for updates / gateway
 
 5. Power subsystem
@@ -35,3 +36,5 @@
 - RF -> SA818 audio -> Codec ADC -> ESP32 demod -> packet stream -> BLE -> Windows desktop test app
 - Windows desktop test app -> BLE -> ESP32 -> APRS message encoder -> TX
 - Phone -> BLE -> ESP32 -> APRS message encoder -> TX
+- Third-party KISS client/bridge -> BLE KISS service -> ESP32 -> AX.25/TX scheduler -> TX
+- RF -> ESP32 decode -> BLE KISS service -> third-party KISS client/bridge

@@ -20,9 +20,14 @@ ESP32-S3 FreeRTOS tasks suggested:
 5. `ble_task`
    - GATT services, notify throttling
    - Config storage
+   - Native PAKT BLE + KISS-over-BLE coexistence
 6. `power_task`
    - battery measurement
    - sleep policy, wake sources
+
+7. `kiss_task` or KISS module within `ble_task`/`aprs_task`
+   - KISS frame encode/decode
+   - shared queue integration with native TX/RX path
 
 ## Key interfaces
 - `IAudioIO` (codec abstraction): `read_samples()`, `write_samples()`
@@ -34,7 +39,9 @@ ESP32-S3 FreeRTOS tasks suggested:
 - Ring buffer for audio samples
 - Packet queue:
   - RX decoded frames -> BLE notify
+  - RX decoded frames -> KISS RX notify
   - TX requests -> scheduler
+  - KISS TX requests -> same scheduler
 
 ## Timing
 - Use precise sample rate (e.g., 8 kHz) for AFSK modem.
