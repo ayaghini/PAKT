@@ -3,6 +3,17 @@
 Covers: host unit tests, Python desktop tests, and ESP-IDF firmware build.
 No hardware required for the first three sections.
 
+This file is the practical setup companion to the canonical spec/status tree in
+`docs/aprs_mvp_docs/`. For protocol or implementation-status questions, prefer:
+- `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
+- `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
+
+Generated build directory note:
+- `firmware/build_*` is the intended location for firmware and host-test build outputs.
+- Repo-root `build_feather_s3/` is also an ESP-IDF-generated build tree for the same `firmware/` project, but it is a separate output directory rather than a second source tree.
+
 ---
 
 ## 1. Prerequisites

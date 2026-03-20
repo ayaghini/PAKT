@@ -1,7 +1,0 @@
-CMake Error at /Users/mac4pro64/esp/esp-idf/tools/cmake/targets.cmake:108 (message):
-   Target 'esp32' in sdkconfig '/Users/mac4pro64/Desktop/pakt/PAKT/firmware/sdkconfig' does not match currently selected IDF_TARGET 'esp32s3'. To change the target, clear the build directory and sdkconfig file, and build the project again.
-Call Stack (most recent call first):
-  /Users/mac4pro64/esp/esp-idf/tools/cmake/project.cmake:24 (__target_init)
-  CMakeLists.txt:11 (include)
-
-

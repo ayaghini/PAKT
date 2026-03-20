@@ -16,11 +16,11 @@ Goal:
 Project-local references:
 - `hardware/prototyping_wiring.md`
 - `hardware/component_selection_rationale.md`
-- `doc/aprs_mvp_docs/hardware/interfaces.md`
-- `doc/hardware/components/esp32-s3/sources.md`
-- `doc/hardware/components/sa818/sources.md`
-- `doc/hardware/components/neo-m8n/sources.md`
-- `doc/hardware/components/sgtl5000/sources.md`
+- `docs/aprs_mvp_docs/hardware/interfaces.md`
+- `docs/hardware/components/esp32-s3/sources.md`
+- `docs/hardware/components/sa818/sources.md`
+- `docs/hardware/components/neo-m8n/sources.md`
+- `docs/hardware/components/sgtl5000/sources.md`
 
 Notes:
 - This repo does not contain local PDFs for all breakout board schematics. It stores authoritative source links and requires schematic verification against your exact board revision before freezing the harness.
@@ -192,7 +192,7 @@ Keep these net names and GPIO assignments aligned in firmware config for direct 
 
 ## 10. Open items before PCB capture
 
-- Capture exact breakout board schematic revisions (PDFs) into `doc/hardware/components/...` for traceable signoff.
+- Capture exact breakout board schematic revisions (PDFs) into `docs/hardware/components/...` for traceable signoff.
 - Replace any provisional component-level assumptions with measured bench values (AF attenuation/filter values, radio bulk capacitance, PTT drive topology).
 - Record measured SA818 deviation and received AF levels from the now-working bench harness.
 - Freeze final pin map only after confirming chosen Feather GPIOs are conflict-free for boot and runtime.

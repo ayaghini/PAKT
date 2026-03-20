@@ -5,7 +5,7 @@ This is the current integration contract for third-party software.
 ## Protocol status
 
 - `Native PAKT BLE`: current and intended for integration now
-- `KISS-over-BLE`: MVP-required interoperability surface, specified but not yet implemented
+- `KISS-over-BLE`: MVP-required interoperability surface; software path is implemented, hardware validation still pending
 
 ## BLE naming and discovery
 
@@ -98,7 +98,7 @@ Characteristics:
 
 Source of truth:
 
-- `doc/aprs_mvp_docs/payload_contracts.md`
+- `docs/aprs_mvp_docs/payload_contracts.md`
 
 ### Device Config
 
@@ -186,7 +186,7 @@ Important:
 Actual implemented schema:
 
 ```json
-{"fw_ver":"0.1.0","hw_rev":"EVT-A","protocol":1,"features":["aprs_2m","ble_chunking","telemetry","msg_ack","config_rw","gps_onboard"]}
+{"fw_ver":"0.1.0","hw_rev":"EVT-A","protocol":1,"features":["aprs_2m","ble_chunking","telemetry","msg_ack","config_rw","gps_onboard","kiss_ble"]}
 ```
 
 Important:
@@ -204,6 +204,7 @@ Feature names currently defined in code:
 - `config_rw`
 - `gps_onboard`
 - `hf_audio`
+- `kiss_ble`
 
 ## Chunking protocol
 
@@ -254,7 +255,7 @@ Practical client behavior:
 
 Current status:
 
-- documented in `doc/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
+- documented in `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
 - now part of MVP scope
-- not yet wired into current firmware/app
-- should be treated as an implementation gap, not a future nice-to-have
+- software path is wired into the current firmware/app
+- remaining gap is hardware validation and third-party interoperability evidence, not protocol design

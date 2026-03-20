@@ -41,6 +41,7 @@
 #include "driver/uart.h"
 #include <atomic>
 #include <cinttypes>
+#include <cmath>
 #include <cstring>
 
 static const char *TAG = "pakt";
@@ -60,6 +61,40 @@ static pakt::PttWatchdog *g_ptt_watchdog = nullptr;
 // Both are read by aprs_task (afsk_tx_frame).  Written once; no mutex needed.
 static pakt::Sa818Radio  *g_radio        = nullptr;
 static i2s_chan_handle_t  g_i2s_tx_chan  = nullptr;
+
+// Rolling 1-second RX peak absolute value, updated by audio_task's demod loop.
+// Read by sa818_bench Stage 6 (RX audio capture) via a non-capturing lambda.
+// Atomic: audio_task writes, radio_task reads during bench window.
+static std::atomic<int32_t>  g_rx_peak_abs{0};
+
+// Cumulative demodulator diagnostics, published by audio_task every ~1 s.
+// Read by aprs_task bench (Stage B) to distinguish "no signal" from "FCS failures".
+//   g_demod_flags      : total 0x7E flag patterns detected (> 0 means AFSK lock)
+//   g_demod_fcs_rejects: frames assembled but CRC failed (> 0 means near-decode)
+static std::atomic<uint32_t> g_demod_flags{0};
+static std::atomic<uint32_t> g_demod_fcs_rejects{0};
+
+// Enhanced RX signal diagnostics, published by audio_task every ~1 s.
+//   g_rx_mean_abs  : mean |sample| in last 1 s window (0-32767 scale).
+//                   Bell 202 at full-scale sine would give ~20900; noise ~200-800.
+//   g_rx_clip_count: samples with |x| > 28000 (≈85% FS) in last 1 s window.
+//                   > 0 indicates ADC saturation / gain too high.
+static std::atomic<uint32_t> g_rx_mean_abs{0};
+static std::atomic<uint32_t> g_rx_clip_count{0};
+
+// ADC gain request: 0–15 steps at +1.5 dB/step → 0 to +22.5 dB
+// (SGTL5000 CHIP_ANA_ADC_CTRL, both channels).
+// Set by aprs_task bench gain sweep; audio_task applies in its per-second tick.
+static std::atomic<uint8_t>  g_adc_gain_req{0};
+
+// PCM snapshot: 1024 raw mono int16 samples captured on demand.
+// arm : aprs_task sets true; audio_task clears when collection starts.
+// valid: audio_task sets true (release) when 1024 samples collected.
+// aprs_task reads/logs the buffer then clears valid and arm for the next test.
+static constexpr size_t kPcmCapLen = 1024;  // 128 ms at 8 kHz
+static int16_t           g_pcm_cap[kPcmCapLen];
+static std::atomic<bool> g_pcm_cap_arm{false};
+static std::atomic<bool> g_pcm_cap_valid{false};
 
 // PCM output buffer for AFSK modulation (global to avoid stack pressure).
 // Max AX.25 = 330 B → ~22 400 samples at 8 kHz/1200 baud; 25 600 adds margin.
@@ -239,10 +274,17 @@ static void radio_task(void *arg)
     );
 
     // Run staged SA818 bench test before normal init.
-    // Pass &g_i2s_tx_chan so Stage 6 (TX audio) can wait for audio_task to publish the handle.
-    pakt::bench::run_sa818_bench(transport, kPttGpio, kUartPort,
-                                 static_cast<const volatile void *>(&g_i2s_tx_chan),
-                                 8000);
+    // Stage 5 (TX audio) waits for g_i2s_tx_chan (published by audio_task after audio_bench).
+    // Stage 6 (RX capture) runs after Stage 5; by then the demod loop is live and
+    // rx_peak_fn returns the rolling 1-s peak_abs from g_rx_peak_abs.
+    pakt::bench::run_sa818_bench(
+        transport, kPttGpio, kUartPort,
+        static_cast<const volatile void *>(&g_i2s_tx_chan),
+        8000,
+        /*tx_wait_ms=*/120000,
+        /*rx_peak_fn=*/[]() -> int32_t {
+            return g_rx_peak_abs.load(std::memory_order_relaxed);
+        });
 
     if (!radio.init()) {
         ESP_LOGE("radio", "SA818 init failed – radio unavailable; PTT remains off");
@@ -437,6 +479,24 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev)
     return true;
 }
 
+// ── Goertzel tone energy estimator ───────────────────────────────────────────
+// Computes normalised power at a given frequency in a short PCM block.
+// Returns a value in [0, ~1]; a pure sine at FS amplitude ≈ 0.25.
+static float goertzel_power(const int16_t *samples, size_t n, float freq_hz, float sr_hz)
+{
+    const float coeff = 2.0f * std::cos(2.0f * static_cast<float>(M_PI) * freq_hz / sr_hz);
+    float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f;
+    float scale = 1.0f / 32768.0f;
+    for (size_t i = 0; i < n; ++i) {
+        s0 = coeff * s1 - s2 + static_cast<float>(samples[i]) * scale;
+        s2 = s1;
+        s1 = s0;
+    }
+    // Power = s1² + s2² - coeff·s1·s2, normalised by N²
+    float power = (s1 * s1 + s2 * s2 - coeff * s1 * s2) / static_cast<float>(n * n);
+    return power;
+}
+
 // ── Audio pipeline ────────────────────────────────────────────────────────────
 //
 // Called once by audio_task. Returns only on unrecoverable init failure.
@@ -578,6 +638,9 @@ static void audio_pipeline_run()
     // The demodulator callback runs in this task context (no RTOS crossing needed).
     pakt::AfskDemodulator demod(kSampleRateHz,
         [](const uint8_t *frame, size_t len) {
+            // Log every decoded frame so bench work can see demod activity.
+            ESP_LOGI("audio", "AFSK: decoded AX.25 frame (%u bytes) → queue",
+                     static_cast<unsigned>(len));
             if (!g_rx_ax25_queue.push(frame, len)) {
                 ESP_LOGW("audio", "RX AX.25 queue full – frame dropped");
             }
@@ -589,6 +652,20 @@ static void audio_pipeline_run()
     ESP_LOGI("audio", "RX pipeline running: SGTL5000 + AfskDemodulator @ %u Hz",
              static_cast<unsigned>(kSampleRateHz));
 
+    // Rolling 1-second RX diagnostics.
+    static constexpr int32_t kClipThresh = 28000; // ~85% of ±32767
+    int32_t  rx_window_peak    = 0;
+    uint32_t rx_window_samples = 0;
+    uint32_t rx_window_abs_sum = 0;
+    uint32_t rx_window_clips   = 0;
+
+    // PCM snapshot state — filled across multiple I2S reads until kPcmCapLen is reached.
+    size_t pcm_cap_pos        = 0;
+    bool   pcm_cap_collecting = false;
+
+    // ADC gain tracking: apply change when aprs_task updates g_adc_gain_req.
+    uint8_t applied_gain = 0;
+
     for (;;) {
         size_t bytes_read = 0;
         esp_err_t err = i2s_channel_read(rx_chan, rx_buf, sizeof(rx_buf),
@@ -596,9 +673,74 @@ static void audio_pipeline_run()
         if (err == ESP_OK && bytes_read > 0) {
             const size_t stereo_samples = bytes_read / sizeof(int16_t);
             const size_t frames = stereo_samples / 2;
+
+            // Demux left channel; collect peak, abs-sum, clip count.
             for (size_t i = 0; i < frames; ++i) {
                 mono_buf[i] = rx_buf[i * 2];
+                const int32_t a = mono_buf[i] >= 0 ? mono_buf[i] : -mono_buf[i];
+                if (a > rx_window_peak)  rx_window_peak = a;
+                rx_window_abs_sum += static_cast<uint32_t>(a);
+                if (a > kClipThresh)     ++rx_window_clips;
             }
+            rx_window_samples += static_cast<uint32_t>(frames);
+
+            // PCM snapshot: wait for a clear signal event (peak > 5000) before capturing.
+            // Threshold of 5000 ensures noise floor (SA818 SQ=0 peak ~1000) cannot
+            // trigger the capture; a real AFSK burst peaks > 10000 at nominal levels.
+            if (!pcm_cap_collecting &&
+                g_pcm_cap_arm.load(std::memory_order_relaxed) &&
+                rx_window_peak > 5000) {
+                pcm_cap_collecting = true;
+                pcm_cap_pos = 0;
+                g_pcm_cap_arm.store(false, std::memory_order_relaxed);
+            }
+            if (pcm_cap_collecting) {
+                const size_t cap_copy =
+                    frames < (kPcmCapLen - pcm_cap_pos)
+                        ? frames
+                        : (kPcmCapLen - pcm_cap_pos);
+                std::memcpy(g_pcm_cap + pcm_cap_pos,
+                            mono_buf, cap_copy * sizeof(int16_t));
+                pcm_cap_pos += cap_copy;
+                if (pcm_cap_pos >= kPcmCapLen) {
+                    pcm_cap_collecting = false;
+                    g_pcm_cap_valid.store(true, std::memory_order_release);
+                }
+            }
+
+            // Publish all diagnostics every ~1 second of audio.
+            if (rx_window_samples >= kSampleRateHz) {
+                g_rx_peak_abs.store(rx_window_peak, std::memory_order_relaxed);
+                g_rx_mean_abs.store(rx_window_abs_sum / rx_window_samples,
+                                    std::memory_order_relaxed);
+                g_rx_clip_count.store(rx_window_clips, std::memory_order_relaxed);
+                const auto ds = demod.stats();
+                g_demod_flags.store(ds.flags, std::memory_order_relaxed);
+                g_demod_fcs_rejects.store(ds.fcs_rejects, std::memory_order_relaxed);
+
+                // Apply ADC gain change if requested by bench sweep.
+                const uint8_t req_gain =
+                    g_adc_gain_req.load(std::memory_order_relaxed);
+                if (req_gain != applied_gain) {
+                    applied_gain = req_gain;
+                    // CHIP_ANA_ADC_CTRL (0x0020): bits[7:4]=ADC_VOL_R, bits[3:0]=ADC_VOL_L
+                    const uint16_t adc_ctrl =
+                        static_cast<uint16_t>((req_gain << 4) | req_gain);
+                    if (sgtl5000_write(sgtl_dev, 0x0020, adc_ctrl) == ESP_OK) {
+                        ESP_LOGI("audio",
+                                 "ADC gain set: step=%u (+%.1f dB per ch, reg=0x%04X)",
+                                 req_gain, req_gain * 1.5f, adc_ctrl);
+                    } else {
+                        ESP_LOGW("audio", "ADC gain write failed (step=%u)", req_gain);
+                    }
+                }
+
+                rx_window_peak    = 0;
+                rx_window_abs_sum = 0;
+                rx_window_clips   = 0;
+                rx_window_samples = 0;
+            }
+
             demod.process(mono_buf, frames);
         } else if (err != ESP_ERR_TIMEOUT) {
             ESP_LOGW("audio", "I2S read error: %s", esp_err_to_name(err));
@@ -780,6 +922,489 @@ static void aprs_task(void *arg)
     ESP_LOGI("aprs", "task started (FW-016 watchdog armed, timeout=%" PRIu32 " ms)",
              pakt::PttWatchdog::kDefaultTimeoutMs);
 
+    // ── APRS bench: prototype TX+RX packet validation ────────────────────────
+    //
+    // Runs once before the normal run loop.  No BLE client is needed.
+    //
+    // Stage A – TX burst:
+    //   Waits for g_radio + g_i2s_tx_chan (SA818 bench runs first in radio_task).
+    //   Sends kTxBurstCount APRS position frames via the real AFSK TX path.
+    //   Payload: N0CALL>APZPKT:!0000.00N/00000.00W>PAKT bench N/3
+    //   Watch for Bell 202 tones on a receiver tuned to 144.390 MHz FM.
+    //
+    // Stage B – RX ADC gain sweep:
+    //   Opens squelch (SQ=0) and tries 4 ADC gain levels (0/+6/+12/+18 dB).
+    //   Each pass is 30 s; logs peak, mean_abs, clip_count, flag-rate, FCS rejects.
+    //   Operator: transmit APRS packets (Bell 202 AFSK) on 144.390 MHz FM.
+    //
+    // Frequency: 144.390 MHz FM — set by SA818 bench earlier in radio_task.
+    {
+        static constexpr uint32_t kPipelineWaitMaxMs  = 200000; // 200 s
+        static constexpr uint32_t kPipelineWaitStepMs = 500;
+        static constexpr int      kTxBurstCount       = 3;
+        static constexpr uint32_t kTxInterpacketMs    = 3000;
+
+        ESP_LOGI("aprs_bench", "");
+        ESP_LOGI("aprs_bench", "############################################");
+        ESP_LOGI("aprs_bench", "  APRS BENCH: TX+RX PACKET VALIDATION");
+        ESP_LOGI("aprs_bench", "  Frequency : 144.390 MHz FM (APRS)");
+        ESP_LOGI("aprs_bench", "  Callsign  : from device config (default N0CALL)");
+        ESP_LOGI("aprs_bench", "############################################");
+
+        do {  // break = skip remaining stages on fatal error
+            // ── Wait for radio + audio pipeline ──────────────────────────────
+            ESP_LOGI("aprs_bench", "  Waiting for SA818 radio + I2S TX "
+                     "(SA818 bench still running in radio_task)...");
+            uint32_t wait_ms = 0;
+            while (wait_ms < kPipelineWaitMaxMs) {
+                if (g_radio && g_i2s_tx_chan) break;
+                vTaskDelay(pdMS_TO_TICKS(kPipelineWaitStepMs));
+                wait_ms += kPipelineWaitStepMs;
+                watchdog.heartbeat(
+                    static_cast<uint32_t>(esp_timer_get_time() / 1000));
+            }
+            if (!g_radio || !g_i2s_tx_chan) {
+                ESP_LOGE("aprs_bench", "ABORT: pipeline not ready after %lu ms.",
+                         static_cast<unsigned long>(kPipelineWaitMaxMs));
+                break;
+            }
+            ESP_LOGI("aprs_bench", "  Pipeline ready (waited %lu ms).",
+                     static_cast<unsigned long>(wait_ms));
+
+            // ── Stage 0: Modem software loopback ─────────────────────────────
+            // Verify the AFSK modem pipeline entirely in software — no RF, no I2S.
+            // Modulate a known AX.25 frame to mono PCM, then feed that PCM
+            // directly into a local AfskDemodulator.  If the callback fires and
+            // the FCS-validated frame comes out, the modem software is correct.
+            // PASS here means any RF RX failures are hardware-only (level /
+            // bandwidth / no signal on-air), not modem bugs.
+            ESP_LOGI("aprs_bench", "");
+            ESP_LOGI("aprs_bench", "--------------------------------------------");
+            ESP_LOGI("aprs_bench", "  STAGE 0: MODEM LOOPBACK (software, no RF)");
+            ESP_LOGI("aprs_bench", "--------------------------------------------");
+            {
+                bool lb_pass = false;
+
+                uint8_t lb_info[pakt::ax25::kMaxInfoLen];
+                size_t  lb_info_len = pakt::aprs::encode_position(
+                    0.0f, 0.0f, '/', '>', "loopback",
+                    lb_info, sizeof(lb_info));
+
+                pakt::ax25::Frame lb_frame =
+                    pakt::aprs::make_ui_frame(
+                        g_device_config.config().callsign,
+                        g_device_config.config().ssid);
+                std::memcpy(lb_frame.info, lb_info, lb_info_len);
+                lb_frame.info_len = lb_info_len;
+
+                uint8_t lb_ax25[pakt::ax25::kMaxEncodedLen];
+                size_t  lb_ax25_len =
+                    pakt::ax25::encode(lb_frame, lb_ax25, sizeof(lb_ax25));
+
+                if (lb_ax25_len == 0) {
+                    ESP_LOGE("aprs_bench",
+                             "Stage 0: ax25::encode failed — loopback skipped");
+                } else {
+                    pakt::AfskModulator lb_mod(8000);
+                    size_t lb_pcm_len = lb_mod.modulate_frame(
+                        lb_ax25, lb_ax25_len,
+                        g_tx_pcm_buf, kAfskMaxPcmSamples);
+
+                    if (lb_pcm_len == 0) {
+                        ESP_LOGE("aprs_bench",
+                                 "Stage 0: modulate_frame returned 0 — loopback skipped");
+                    } else {
+                        ESP_LOGI("aprs_bench",
+                                 "Stage 0: %u bytes AX.25 → %u PCM samples → demod...",
+                                 static_cast<unsigned>(lb_ax25_len),
+                                 static_cast<unsigned>(lb_pcm_len));
+
+                        bool lb_decoded = false;
+                        pakt::AfskDemodulator lb_demod(8000,
+                            [&lb_decoded](const uint8_t *, size_t) {
+                                lb_decoded = true;
+                            });
+                        lb_demod.process(g_tx_pcm_buf, lb_pcm_len);
+
+                        if (lb_decoded) {
+                            ESP_LOGI("aprs_bench",
+                                     "Stage 0: PASS — modem loopback decoded frame OK");
+                            lb_pass = true;
+                        } else {
+                            ESP_LOGE("aprs_bench",
+                                     "Stage 0: FAIL — demodulator decoded 0 frames");
+                            ESP_LOGE("aprs_bench",
+                                     "  Modem software bug — RF RX results unreliable");
+                        }
+                    }
+                }
+                (void)lb_pass;
+            }
+
+            // ── Stage A: TX burst ─────────────────────────────────────────────
+            ESP_LOGI("aprs_bench", "");
+            ESP_LOGI("aprs_bench", "--------------------------------------------");
+            ESP_LOGI("aprs_bench", "  STAGE A: TX BURST — %d APRS packets", kTxBurstCount);
+            ESP_LOGI("aprs_bench", "  >>> ACTION: Monitor a receiver on 144.390 MHz FM.");
+            ESP_LOGI("aprs_bench", "  >>> You should hear Bell 202 AFSK tones per packet.");
+            ESP_LOGI("aprs_bench", "  >>> APRS TNC/app will decode N0CALL>APZPKT frames.");
+            ESP_LOGI("aprs_bench", "--------------------------------------------");
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            watchdog.heartbeat(static_cast<uint32_t>(esp_timer_get_time() / 1000));
+
+            int tx_ok = 0, tx_fail = 0;
+            for (int i = 1; i <= kTxBurstCount; ++i) {
+                watchdog.heartbeat(
+                    static_cast<uint32_t>(esp_timer_get_time() / 1000));
+
+                const auto &cfg = g_device_config.config();
+
+                // Build APRS position info field.
+                // 0.00N / 0.00W is unmistakably a test position.
+                char comment[48];
+                snprintf(comment, sizeof(comment), "PAKT bench %d/%d", i, kTxBurstCount);
+
+                uint8_t info_buf[pakt::ax25::kMaxInfoLen];
+                size_t info_len = pakt::aprs::encode_position(
+                    0.0f, 0.0f, '/', '>', comment,
+                    info_buf, sizeof(info_buf));
+
+                if (info_len == 0) {
+                    ESP_LOGE("aprs_bench", "[%d/%d] encode_position failed", i, kTxBurstCount);
+                    ++tx_fail;
+                    continue;
+                }
+
+                pakt::ax25::Frame frame =
+                    pakt::aprs::make_ui_frame(cfg.callsign, cfg.ssid);
+                std::memcpy(frame.info, info_buf, info_len);
+                frame.info_len = info_len;
+
+                uint8_t ax25_buf[pakt::ax25::kMaxEncodedLen];
+                size_t ax25_len = pakt::ax25::encode(frame, ax25_buf, sizeof(ax25_buf));
+                if (ax25_len == 0) {
+                    ESP_LOGE("aprs_bench", "[%d/%d] ax25::encode failed", i, kTxBurstCount);
+                    ++tx_fail;
+                    continue;
+                }
+
+                // Decode back to TNC2 for log confirmation.
+                pakt::ax25::Frame dbg_f;
+                char tnc2[256] = "<format unavail>";
+                if (pakt::ax25::decode(ax25_buf, ax25_len, dbg_f)) {
+                    pakt::ax25::to_tnc2(dbg_f, tnc2, sizeof(tnc2));
+                }
+                ESP_LOGI("aprs_bench", "[%d/%d] TX: %s  (%u bytes AX.25)",
+                         i, kTxBurstCount, tnc2, static_cast<unsigned>(ax25_len));
+
+                bool ok = afsk_tx_frame(ax25_buf, ax25_len);
+                if (ok) {
+                    ++tx_ok;
+                    ESP_LOGI("aprs_bench", "[%d/%d] TX done: afsk_tx ok", i, kTxBurstCount);
+                } else {
+                    ++tx_fail;
+                    ESP_LOGE("aprs_bench", "[%d/%d] TX FAIL: afsk_tx returned false",
+                             i, kTxBurstCount);
+                }
+
+                // Inter-packet gap — keep watchdog alive.
+                if (i < kTxBurstCount) {
+                    for (uint32_t d = 0; d < kTxInterpacketMs; d += 500) {
+                        vTaskDelay(pdMS_TO_TICKS(500));
+                        watchdog.heartbeat(
+                            static_cast<uint32_t>(esp_timer_get_time() / 1000));
+                    }
+                }
+            }
+            ESP_LOGI("aprs_bench", "TX burst: %d ok  %d fail  (of %d)",
+                     tx_ok, tx_fail, kTxBurstCount);
+
+            // ── Stage B: ADC gain sweep RX test ──────────────────────────────
+            //
+            // 4 passes × 30 s = 120 s total.
+            // Each pass sets a different SGTL5000 ADC gain, then listens for
+            // APRS packets.  Per-second log includes peak, mean_abs, clip_count,
+            // flag rate, FCS rejects, and decoded count.
+            //
+            // Gain steps (CHIP_ANA_ADC_CTRL, 1.5 dB/step):
+            //   Pass 1: 0  →  0.0 dB (baseline)
+            //   Pass 2: 4  →  +6.0 dB
+            //   Pass 3: 8  → +12.0 dB
+            //   Pass 4: 12 → +18.0 dB
+            //
+            // Diagnostics interpretation:
+            //   peak     > 500          → audio energy from SA818 AF_OUT
+            //   mean_abs ~ 5000-15000   → healthy demod input range
+            //   mean_abs < 500          → signal too weak; increase gain or check wiring
+            //   clip_count > 100/s      → ADC saturating; gain too high or signal too loud
+            //   dt >= 40                → AFSK burst; demod is locking on Bell 202 preamble
+            //   fcs_rej > 0             → frames assembling but CRC bad (wrong level / distortion)
+            //   decoded > 0             → PASS
+
+            static constexpr uint8_t  kGainSteps[]     = {0, 4, 8, 12};
+            static constexpr int      kNumPasses        = 4;
+            static constexpr int32_t  kPassWindowMs     = 30000; // 30 s per pass
+            static constexpr uint32_t kAfskBurstThresh  = 40;
+
+            ESP_LOGI("aprs_bench", "");
+            ESP_LOGI("aprs_bench", "############################################");
+            ESP_LOGI("aprs_bench", "  STAGE B: APRS RX — ADC GAIN SWEEP");
+            ESP_LOGI("aprs_bench", "  4 passes × 30 s  (0 / +6 / +12 / +18 dB ADC gain)");
+            ESP_LOGI("aprs_bench", "  Frequency : 144.390 MHz FM, no CTCSS.");
+            ESP_LOGI("aprs_bench", "  Source    : APRSdroid, TNC, or any Bell 202 APRS TX.");
+            ESP_LOGI("aprs_bench", "  Send 2-3 APRS packets per pass (every 10-15 s).");
+            ESP_LOGI("aprs_bench", "  APRS data mode ONLY — do NOT transmit voice.");
+            ESP_LOGI("aprs_bench", "############################################");
+            ESP_LOGI("aprs_bench", "");
+            ESP_LOGI("aprs_bench", "  Column key:");
+            ESP_LOGI("aprs_bench", "    peak    : max |sample| this second (0-32767)");
+            ESP_LOGI("aprs_bench", "    mean    : avg |sample| (< 500 = too quiet; > 20000 = near clipping)");
+            ESP_LOGI("aprs_bench", "    clip    : samples/s above 85%% FS  (> 100 = saturation)");
+            ESP_LOGI("aprs_bench", "    dt      : HDLC flags/s (noise baseline ~24; APRS burst > 40)");
+            ESP_LOGI("aprs_bench", "    fcs_rej : frames assembled but CRC failed");
+            ESP_LOGI("aprs_bench", "    dec     : valid decoded frames (goal > 0)");
+            ESP_LOGI("aprs_bench", "");
+
+            if (g_radio->set_squelch(0)) {
+                ESP_LOGI("aprs_bench", "  Squelch opened (SQ=0) for all passes.");
+            } else {
+                ESP_LOGW("aprs_bench", "  set_squelch(0) failed; continuing with default SQ.");
+            }
+
+            int total_decoded = 0;
+
+            // PCM snapshot will be armed at the start of each pass while not yet captured.
+
+            for (int pass = 0; pass < kNumPasses; ++pass) {
+                const uint8_t gain_step = kGainSteps[pass];
+                const float   gain_db   = gain_step * 1.5f;
+
+                // Request gain change; audio_task applies it in next per-second tick.
+                g_adc_gain_req.store(gain_step, std::memory_order_relaxed);
+
+                // (Re-)arm PCM capture at the start of every pass so that any
+                // signal event in this pass overwrites an earlier noise capture.
+                g_pcm_cap_valid.store(false, std::memory_order_relaxed);
+                g_pcm_cap_arm.store(true, std::memory_order_relaxed);
+
+                ESP_LOGI("aprs_bench", "");
+                ESP_LOGI("aprs_bench", "--- PASS %d/%d: ADC gain = +%.1f dB (step=%u) ---",
+                         pass + 1, kNumPasses, gain_db, gain_step);
+                ESP_LOGI("aprs_bench", "  Waiting 2 s for gain to take effect...");
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                watchdog.heartbeat(
+                    static_cast<uint32_t>(esp_timer_get_time() / 1000));
+
+                ESP_LOGI("aprs_bench", "");
+                ESP_LOGI("aprs_bench",
+                         "  >>> SEND 2-3 APRS PACKETS NOW on 144.390 MHz FM.");
+                ESP_LOGI("aprs_bench",
+                         "  >>> Bell 202 AFSK ONLY — not voice, not carrier.");
+                ESP_LOGI("aprs_bench",
+                         "  >>> Packet every 10-15 s during this 30 s window.");
+                ESP_LOGI("aprs_bench", "");
+
+                // Snapshot counters at pass start for deltas.
+                const uint32_t flags_base   =
+                    g_demod_flags.load(std::memory_order_relaxed);
+                const uint32_t fcs_base     =
+                    g_demod_fcs_rejects.load(std::memory_order_relaxed);
+                uint32_t prev_flags_abs     = flags_base;
+                int      pass_decoded       = 0;
+                int      elapsed_s          = 0;
+                const int64_t pass_end      =
+                    esp_timer_get_time() + static_cast<int64_t>(kPassWindowMs) * 1000LL;
+
+                while (esp_timer_get_time() < pass_end) {
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    ++elapsed_s;
+                    watchdog.heartbeat(
+                        static_cast<uint32_t>(esp_timer_get_time() / 1000));
+
+                    // Drain decoded AX.25 frames from audio_task.
+                    {
+                        uint8_t ax25_frame[pakt::kKissMaxFrame];
+                        size_t  ax25_len = 0;
+                        while (g_rx_ax25_queue.pop(ax25_frame, &ax25_len)) {
+                            ++pass_decoded;
+                            ++total_decoded;
+                            pakt::ax25::Frame f;
+                            char tnc2_rx[256] = "<decode failed>";
+                            if (pakt::ax25::decode(ax25_frame, ax25_len, f)) {
+                                pakt::ax25::to_tnc2(f, tnc2_rx, sizeof(tnc2_rx));
+                            }
+                            ESP_LOGI("aprs_bench",
+                                     "  *** [RX #%d pass=%d t=%ds gain=+%.1fdB] %s ***",
+                                     total_decoded, pass + 1, elapsed_s,
+                                     gain_db, tnc2_rx);
+                        }
+                    }
+
+                    // Per-second diagnostics.
+                    const int32_t  peak      = g_rx_peak_abs.load(std::memory_order_relaxed);
+                    const uint32_t mean_abs  = g_rx_mean_abs.load(std::memory_order_relaxed);
+                    const uint32_t clips     = g_rx_clip_count.load(std::memory_order_relaxed);
+                    const uint32_t flags_abs = g_demod_flags.load(std::memory_order_relaxed);
+                    const uint32_t fcs_abs   = g_demod_fcs_rejects.load(std::memory_order_relaxed);
+                    const uint32_t flag_dt   = flags_abs - prev_flags_abs;
+                    const uint32_t fcs_rej   = fcs_abs - fcs_base;
+                    prev_flags_abs = flags_abs;
+
+                    ESP_LOGI("aprs_bench",
+                             "  [%2ds/30s] peak=%-6" PRId32
+                             " mean=%-5" PRIu32
+                             " clip=%-4" PRIu32
+                             " dt=%-3" PRIu32
+                             " fcs_rej=%-3" PRIu32
+                             " dec=%d",
+                             elapsed_s, peak, mean_abs, clips,
+                             flag_dt, fcs_rej, pass_decoded);
+
+                    if (flag_dt >= kAfskBurstThresh) {
+                        ESP_LOGW("aprs_bench",
+                                 "  !!! AFSK BURST: dt=%" PRIu32
+                                 " flags/s at t=%ds gain=+%.1f dB !!!",
+                                 flag_dt, elapsed_s, gain_db);
+                    }
+                    if (clips > 100) {
+                        ESP_LOGW("aprs_bench",
+                                 "  *** CLIPPING: %" PRIu32
+                                 " samples/s > 85%% FS — gain too high ***",
+                                 clips);
+                    }
+
+                    // Re-arm PCM capture whenever signal is present this second
+                    // but we don't yet have a valid high-signal snapshot.
+                    // This catches signal events that started after pass-start arm was consumed.
+                    if (peak > 5000 &&
+                        !g_pcm_cap_valid.load(std::memory_order_relaxed) &&
+                        !g_pcm_cap_arm.load(std::memory_order_relaxed)) {
+                        g_pcm_cap_arm.store(true, std::memory_order_relaxed);
+                    }
+                } // while pass window
+
+                const uint32_t pass_flags   =
+                    g_demod_flags.load(std::memory_order_relaxed) - flags_base;
+                const uint32_t pass_fcs_rej =
+                    g_demod_fcs_rejects.load(std::memory_order_relaxed) - fcs_base;
+                ESP_LOGI("aprs_bench",
+                         "  PASS %d SUMMARY: +%.1f dB  decoded=%d  flags=%" PRIu32
+                         "  fcs_rej=%" PRIu32,
+                         pass + 1, gain_db, pass_decoded,
+                         pass_flags, pass_fcs_rej);
+
+                if (total_decoded > 0) {
+                    ESP_LOGI("aprs_bench", "  >>> APRS RX PASS — stopping gain sweep early.");
+                    break;
+                }
+            } // for pass
+
+            // Restore squelch and ADC gain.
+            g_radio->set_squelch(1);
+            g_adc_gain_req.store(0, std::memory_order_relaxed);
+            ESP_LOGI("aprs_bench", "  Squelch restored (SQ=1). ADC gain reset to 0 dB.");
+
+            // ── PCM snapshot dump ─────────────────────────────────────────────
+            // Log captured raw PCM for offline waveform inspection.
+            // If no Bell 202 arrived, the capture still reveals noise or carrier shape.
+            if (g_pcm_cap_valid.load(std::memory_order_acquire)) {
+                // Goertzel spectral analysis: quantify Bell 202 tone energy in the capture.
+                // A clean 1200 Hz mark tone gives mark_pwr >> space_pwr; vice versa for space.
+                // If neither is >> the other and both are near noise, signal is not AFSK.
+                const float mark_pwr  = goertzel_power(g_pcm_cap, kPcmCapLen, 1200.0f, 8000.0f);
+                const float space_pwr = goertzel_power(g_pcm_cap, kPcmCapLen, 2200.0f, 8000.0f);
+                const float noise_pwr = goertzel_power(g_pcm_cap, kPcmCapLen,  900.0f, 8000.0f);
+
+                ESP_LOGI("aprs_bench", "");
+                ESP_LOGI("aprs_bench",
+                         "--- PCM SNAPSHOT: %u samples @ 8 kHz = 128 ms ---",
+                         static_cast<unsigned>(kPcmCapLen));
+                ESP_LOGI("aprs_bench",
+                         "  Tone analysis (Goertzel, normalised):");
+                ESP_LOGI("aprs_bench",
+                         "    1200 Hz (mark)  power = %.6f%s",
+                         mark_pwr,  mark_pwr  > 0.001f ? "  << MARK TONE PRESENT"  : "");
+                ESP_LOGI("aprs_bench",
+                         "    2200 Hz (space) power = %.6f%s",
+                         space_pwr, space_pwr > 0.001f ? "  << SPACE TONE PRESENT" : "");
+                ESP_LOGI("aprs_bench",
+                         "    900 Hz  (noise) power = %.6f  (reference)",
+                         noise_pwr);
+                if (mark_pwr > 0.001f || space_pwr > 0.001f) {
+                    ESP_LOGI("aprs_bench",
+                             "  >>> AFSK TONES DETECTED in capture — demod input OK.");
+                } else {
+                    ESP_LOGW("aprs_bench",
+                             "  >>> NO AFSK TONES in capture — signal is NOT Bell 202.");
+                    ESP_LOGW("aprs_bench",
+                             "      Check: APRS source is in AFSK/audio mode (not APRS-IS).");
+                    ESP_LOGW("aprs_bench",
+                             "      Check: HT VOX or PTT cable actually modulating RF.");
+                }
+                ESP_LOGI("aprs_bench",
+                         "    (signed int16, left channel, 8 kHz — copy for offline analysis)");
+                // 16 samples per line.
+                char line[160];
+                for (size_t i = 0; i < kPcmCapLen; i += 16) {
+                    int pos = 0;
+                    for (size_t j = 0; j < 16 && (i + j) < kPcmCapLen; ++j) {
+                        pos += snprintf(line + pos, sizeof(line) - (size_t)pos,
+                                        "%d,",
+                                        static_cast<int>(g_pcm_cap[i + j]));
+                    }
+                    if (pos > 0 && line[pos - 1] == ',') line[pos - 1] = '\0';
+                    ESP_LOGI("aprs_bench", "  %s", line);
+                }
+                ESP_LOGI("aprs_bench", "--- END PCM SNAPSHOT ---");
+            } else {
+                ESP_LOGW("aprs_bench",
+                         "  PCM snapshot not captured (no signal during capture window).");
+            }
+
+            // ── Final summary + diagnosis ─────────────────────────────────────
+            ESP_LOGI("aprs_bench", "");
+            ESP_LOGI("aprs_bench", "############################################");
+            ESP_LOGI("aprs_bench", "  APRS BENCH RESULT — GAIN SWEEP");
+            if (tx_ok == kTxBurstCount) {
+                ESP_LOGI("aprs_bench", "  TX path: PASS (%d/%d)", tx_ok, kTxBurstCount);
+            } else {
+                ESP_LOGE("aprs_bench", "  TX path: FAIL (%d/%d)", tx_ok, kTxBurstCount);
+            }
+            if (total_decoded > 0) {
+                ESP_LOGI("aprs_bench",
+                         "  RX path: PASS  (%d frame(s) decoded)", total_decoded);
+            } else {
+                ESP_LOGW("aprs_bench", "  RX path: FAIL  (0 frames decoded across all passes)");
+                ESP_LOGW("aprs_bench", "");
+                ESP_LOGW("aprs_bench", "  Diagnosis guide:");
+                ESP_LOGW("aprs_bench", "  peak=0 across ALL passes:");
+                ESP_LOGW("aprs_bench", "    → SA818 AF_OUT not reaching SGTL5000 LINE_IN.");
+                ESP_LOGW("aprs_bench", "    → Check AC coupling cap on AF_RX_COUPLED net.");
+                ESP_LOGW("aprs_bench", "    → Check SA818 AF_OUT wiring to PJRC LINE_IN header.");
+                ESP_LOGW("aprs_bench", "  peak > 500 but mean_abs < 200:");
+                ESP_LOGW("aprs_bench", "    → Signal present but too weak even at max gain.");
+                ESP_LOGW("aprs_bench", "    → Increase SA818 AF_OUT (AT+DMOSETVOLUME=8).");
+                ESP_LOGW("aprs_bench", "    → Check RC LPF cutoff on AF_RX path (not too low).");
+                ESP_LOGW("aprs_bench", "  clip_count high (> 100/s) in every pass:");
+                ESP_LOGW("aprs_bench", "    → ADC saturating at all gain levels.");
+                ESP_LOGW("aprs_bench", "    → SA818 AF_OUT too loud; add series resistor.");
+                ESP_LOGW("aprs_bench", "  mean_abs healthy (500-15000) but dt never > 40:");
+                ESP_LOGW("aprs_bench", "    → Signal level OK but NOT Bell 202 AFSK.");
+                ESP_LOGW("aprs_bench", "    → Verify APRS source is sending data packets,");
+                ESP_LOGW("aprs_bench", "      not voice.  Check APRSdroid Audio mode setting.");
+                ESP_LOGW("aprs_bench", "  dt > 40 but fcs_rej > 0 and decoded = 0:");
+                ESP_LOGW("aprs_bench", "    → AFSK preamble seen but frame data corrupted.");
+                ESP_LOGW("aprs_bench", "    → Check SA818 RX deviation / bandwidth.");
+                ESP_LOGW("aprs_bench", "    → Check AC coupling cap value (should be 1 uF).");
+                ESP_LOGW("aprs_bench", "    → Review PCM snapshot above for distortion.");
+            }
+            ESP_LOGI("aprs_bench", "  Normal APRS pipeline now active.");
+            ESP_LOGI("aprs_bench", "############################################");
+            ESP_LOGI("aprs_bench", "");
+        } while (false);
+    }
+    // ── End APRS bench ────────────────────────────────────────────────────────
+
     for (;;) {
         const uint32_t now_ms =
             static_cast<uint32_t>(esp_timer_get_time() / 1000);
@@ -793,6 +1418,17 @@ static void aprs_task(void *arg)
             uint8_t ax25_frame[pakt::kKissMaxFrame];
             size_t  ax25_len = 0;
             while (g_rx_ax25_queue.pop(ax25_frame, &ax25_len)) {
+                // Log every decoded packet as TNC2 for serial bench monitoring.
+                {
+                    pakt::ax25::Frame rx_frame;
+                    char tnc2_log[256] = "<decode failed>";
+                    if (pakt::ax25::decode(ax25_frame, ax25_len, rx_frame)) {
+                        pakt::ax25::to_tnc2(rx_frame, tnc2_log, sizeof(tnc2_log));
+                    }
+                    ESP_LOGI("aprs", "RX packet: %s  (%u bytes)",
+                             tnc2_log, static_cast<unsigned>(ax25_len));
+                }
+
                 // 1. Native rx_packet notify (PAKT BLE clients, e.g. desktop app)
                 pakt::BleServer::instance().notify_rx_packet(ax25_frame, ax25_len);
 

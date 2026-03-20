@@ -15,11 +15,11 @@
 //   AT+DMOSETVOLUME=N\r\n         → +DMOSETVOLUME:0\r\n      (volume OK, N=1-8)
 //
 // ── TX audio caution ─────────────────────────────────────────────────────────
-// Stage 6 (TX audio) asserts PTT for ~2 seconds. Before running:
+// Stage 5 (TX audio) asserts PTT for ~14 seconds. Before running:
 //   - Connect a 50 Ω dummy load OR a proper antenna to the SA818 SMA connector.
 //   - Ensure compliance with local amateur radio regulations (licensed operator).
-//   - The tone transmitted is 1 kHz at ~30% FS LINE_OUT level (conservative).
-//   - Do NOT run Stage 6 without a load; the SA818 PA can be damaged by open TX.
+//   - Each tone is at ~30% FS LINE_OUT level (conservative for SA818 AF_IN).
+//   - Do NOT run Stage 5 without a load; the SA818 PA can be damaged by open TX.
 
 #include "sa818_bench_test.h"
 
@@ -80,13 +80,12 @@ static bool resp_ok(const char *resp, const char *prefix)
 }
 
 // Write a square-wave tone to the I2S TX channel (stereo L=R).
-// Used for Stage 6 (TX audio): SA818 AF_IN receives from LINE_OUT.
 static void write_tone_stereo(i2s_chan_handle_t tx,
                                uint32_t         sr,
                                uint32_t         hz,
                                uint32_t         ms)
 {
-    int16_t buf[512]; // 256 stereo frames; bench-init only, stack-local is fine
+    int16_t buf[512]; // 256 stereo frames
     const uint32_t half_p    = sr / (hz * 2u) > 0u ? sr / (hz * 2u) : 1u;
     uint32_t       remaining = (sr * ms) / 1000u;
     uint32_t       phase     = 0;
@@ -100,6 +99,21 @@ static void write_tone_stereo(i2s_chan_handle_t tx,
             buf[i * 2 + 1] = s;
             ++phase;
         }
+        size_t written = 0;
+        i2s_channel_write(tx, buf, frames * 2u * sizeof(int16_t),
+                          &written, pdMS_TO_TICKS(300));
+        remaining -= static_cast<uint32_t>(frames);
+    }
+}
+
+// Write silence (stereo) to the I2S TX channel.
+static void write_silence_stereo(i2s_chan_handle_t tx, uint32_t ms, uint32_t sr)
+{
+    int16_t buf[512];
+    memset(buf, 0, sizeof(buf));
+    uint32_t remaining = (sr * ms) / 1000u;
+    while (remaining > 0u) {
+        const size_t frames = remaining > 256u ? 256u : remaining;
         size_t written = 0;
         i2s_channel_write(tx, buf, frames * 2u * sizeof(int16_t),
                           &written, pdMS_TO_TICKS(300));
@@ -186,53 +200,19 @@ static void stage4_ptt_toggle(gpio_num_t ptt_gpio)
     ESP_LOGI(kTag, "  >>> PASS: PTT GPIO toggled. Verify visually (SA818 TX LED / APC pin).");
 }
 
-static void stage5_rx_audio(pakt::ISa818Transport &t)
+// Stage 5: 10-tone stepped TX sequence.
+//
+// Frequencies (600–2400 Hz in 200 Hz steps) span the APRS audio band and are
+// individually distinguishable on any FM receiver.  Each tone is 1 s; gaps are
+// 300 ms of silence (PTT stays asserted throughout).
+// Total on-air time: ~14 s.
+static void stage5_tx_audio_sequence(gpio_num_t           ptt_gpio,
+                                      const volatile void *p_i2s_tx,
+                                      uint32_t             sample_rate_hz,
+                                      uint32_t             tx_wait_ms)
 {
     ESP_LOGI(kTag, "");
-    ESP_LOGI(kTag, "--- STAGE 5: RX AUDIO PATH (SA818 AF_OUT -> LINE_IN) ---");
-
-    // Open squelch (SQ=0) so any on-frequency signal passes AF_OUT.
-    ESP_LOGI(kTag, "  Setting squelch=0 (open) and volume=8 (max AF_OUT level)...");
-    {
-        char resp[64];
-        at_exchange(t, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,0,0000\r\n",
-                    resp, sizeof(resp));
-        at_exchange(t, "AT+DMOSETVOLUME=8\r\n", resp, sizeof(resp));
-    }
-
-    ESP_LOGI(kTag, "");
-    ESP_LOGI(kTag, "  >>> ACTION: Transmit from a nearby VHF radio on 144.390 MHz.");
-    ESP_LOGI(kTag, "              (HT or base station, any FM signal will do.)");
-    ESP_LOGI(kTag, "  >>> Verify: SA818 AF_OUT is wired to SGTL5000 LINE_IN_L via AC cap.");
-    ESP_LOGI(kTag, "  >>> Check : look for non-zero peak/rms values in audio_bench LINE_IN");
-    ESP_LOGI(kTag, "              monitor output (tag 'audio_bench', run before this test).");
-    ESP_LOGI(kTag, "  >>> Or    : connect LINE_IN to a speaker/amplifier to hear audio.");
-    ESP_LOGI(kTag, "  Waiting 20 seconds for manual RX audio verification...");
-
-    for (int s = 20; s > 0; --s) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        if (s % 5 == 0) {
-            ESP_LOGI(kTag, "  [%2d s remaining] Transmit now if checking RX audio path.", s);
-        }
-    }
-
-    // Restore squelch=1.
-    ESP_LOGI(kTag, "  Restoring squelch=1...");
-    {
-        char resp[64];
-        at_exchange(t, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,1,0000\r\n",
-                    resp, sizeof(resp));
-    }
-    ESP_LOGI(kTag, "  >>> Stage 5 complete. RX audio path is operator-verified.");
-}
-
-static void stage6_tx_audio(gpio_num_t ptt_gpio,
-                             const volatile void *p_i2s_tx,
-                             uint32_t             sample_rate_hz,
-                             uint32_t             tx_wait_ms)
-{
-    ESP_LOGI(kTag, "");
-    ESP_LOGI(kTag, "--- STAGE 6: TX AUDIO PATH (LINE_OUT -> SA818 AF_IN) ---");
+    ESP_LOGI(kTag, "--- STAGE 5: TX AUDIO PATH — 10-TONE SEQUENCE (LINE_OUT -> SA818 AF_IN) ---");
 
     if (!p_i2s_tx) {
         ESP_LOGW(kTag, "  Skipped: I2S TX handle pointer is null (pass &g_i2s_tx_chan).");
@@ -247,7 +227,6 @@ static void stage6_tx_audio(gpio_num_t ptt_gpio,
                              + static_cast<int64_t>(tx_wait_ms) * 1000LL;
     i2s_chan_handle_t tx = nullptr;
     while (esp_timer_get_time() < deadline) {
-        // p_i2s_tx points to a i2s_chan_handle_t (pointer-sized); volatile read.
         tx = *reinterpret_cast<const volatile i2s_chan_handle_t *>(p_i2s_tx);
         if (tx) break;
         vTaskDelay(pdMS_TO_TICKS(200));
@@ -255,42 +234,140 @@ static void stage6_tx_audio(gpio_num_t ptt_gpio,
 
     if (!tx) {
         ESP_LOGW(kTag, "  Timeout waiting for I2S TX; skipping TX audio stage.");
-        ESP_LOGW(kTag, "  To run manually: add a call after audio_task is ready.");
         return;
     }
     ESP_LOGI(kTag, "  I2S TX handle ready.");
 
     ESP_LOGI(kTag, "");
-    ESP_LOGI(kTag, "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    ESP_LOGI(kTag, "  !! TX AUDIO TEST — SA818 WILL TRANSMIT ON 144.390  !!");
-    ESP_LOGI(kTag, "  !! ACTION: Connect 50 ohm dummy load OR antenna NOW !!");
-    ESP_LOGI(kTag, "  !! Comply with local amateur radio regulations.      !!");
-    ESP_LOGI(kTag, "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    ESP_LOGI(kTag, "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    ESP_LOGI(kTag, "  !! TX AUDIO TEST — SA818 WILL TRANSMIT ON 144.390 MHz       !!");
+    ESP_LOGI(kTag, "  !! ACTION: Connect 50 ohm dummy load OR antenna NOW          !!");
+    ESP_LOGI(kTag, "  !! Monitor on a nearby FM receiver tuned to 144.390 MHz      !!");
+    ESP_LOGI(kTag, "  !! You should hear 10 distinct ascending tones (tone 1..10)  !!");
+    ESP_LOGI(kTag, "  !! Comply with local amateur radio regulations.              !!");
+    ESP_LOGI(kTag, "  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     ESP_LOGI(kTag, "  Transmitting in:");
     for (int c = 5; c > 0; --c) {
         ESP_LOGI(kTag, "    %d ...", c);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    ESP_LOGI(kTag, "  Asserting PTT...");
-    gpio_set_level(ptt_gpio, 0);   // PTT active-low: LOW = TX
+    // 10 stepped tones: 600 Hz → 2400 Hz in 200 Hz increments.
+    static const uint32_t kFreqs[10] = {
+        600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400
+    };
+    static const uint32_t kToneDurationMs = 1000;  // 1 s per tone
+    static const uint32_t kGapMs          = 300;   // 300 ms silence between tones
+
+    ESP_LOGI(kTag, "  Asserting PTT for tone sequence (~14 s)...");
+    gpio_set_level(ptt_gpio, 0);    // PTT active-low: LOW = TX
     vTaskDelay(pdMS_TO_TICKS(100)); // PA ramp-up
 
-    ESP_LOGI(kTag, "  Sending 1 kHz tone for 2 seconds via LINE_OUT -> SA818 AF_IN...");
-    write_tone_stereo(tx, sample_rate_hz, 1000, 2000);
+    for (int i = 0; i < 10; ++i) {
+        ESP_LOGI(kTag, "  TONE %d/10: %lu Hz — 1 s",
+                 i + 1,
+                 static_cast<unsigned long>(kFreqs[i]));
+        write_tone_stereo(tx, sample_rate_hz, kFreqs[i], kToneDurationMs);
+        if (i < 9) {
+            write_silence_stereo(tx, kGapMs, sample_rate_hz);
+        }
+    }
 
     // Drain DMA (4 descs × 256 frames / 8 kHz ≈ 128 ms).
     vTaskDelay(pdMS_TO_TICKS(150));
 
-    gpio_set_level(ptt_gpio, 1);   // PTT HIGH = RX/idle
-    ESP_LOGI(kTag, "  PTT deasserted.");
+    gpio_set_level(ptt_gpio, 1);    // PTT HIGH = RX/idle
+    ESP_LOGI(kTag, "  PTT deasserted. TX sequence complete.");
 
-    ESP_LOGI(kTag, "  >>> PASS if a nearby receiver heard a 1 kHz tone on 144.390 MHz.");
+    ESP_LOGI(kTag, "");
+    ESP_LOGI(kTag, "  >>> PASS if receiver heard 10 distinct ascending tones on 144.390 MHz.");
     ESP_LOGI(kTag, "  >>> FAIL clues:");
-    ESP_LOGI(kTag, "       No signal heard   -> check LINE_OUT L -> SA818 AF_IN wiring");
-    ESP_LOGI(kTag, "                           and AC coupling capacitor.");
-    ESP_LOGI(kTag, "       Carrier but no tone -> AF_IN path open; check coupling/attenuation.");
-    ESP_LOGI(kTag, "       Overdeviated       -> add attenuation between LINE_OUT and AF_IN.");
+    ESP_LOGI(kTag, "       No signal heard     -> check LINE_OUT L -> SA818 AF_IN wiring + AC cap.");
+    ESP_LOGI(kTag, "       Carrier but no tones -> AF_IN path open; check coupling/attenuation.");
+    ESP_LOGI(kTag, "       All tones same pitch -> I2S sample rate mismatch; check MCLK config.");
+    ESP_LOGI(kTag, "       Overdeviated         -> add attenuation between LINE_OUT and AF_IN.");
+}
+
+// Stage 6: RX audio capture.
+//
+// Opens SA818 squelch so any on-frequency signal passes AF_OUT → LINE_IN.
+// Uses rx_peak_fn (if provided) to log the rolling 1-s peak_abs from the
+// audio_task demod loop.  This stage runs AFTER stage5_tx_audio_sequence,
+// so the audio demod loop is already running and rx_peak_fn returns live data.
+//
+// Operator action: key a nearby HT on 144.390 MHz and speak for several
+// seconds; the log should show peak_abs > 500 while the radio is transmitting.
+static void stage6_rx_audio_capture(pakt::ISa818Transport &t,
+                                     RxPeakFn              rx_peak_fn)
+{
+    ESP_LOGI(kTag, "");
+    ESP_LOGI(kTag, "--- STAGE 6: RX AUDIO PATH (SA818 AF_OUT -> LINE_IN -> ADC) ---");
+
+    // Open squelch (SQ=0) and set max volume so any on-freq FM signal passes
+    // SA818 AF_OUT regardless of signal strength.
+    ESP_LOGI(kTag, "  Setting squelch=0 (open) and volume=8 (max AF_OUT level)...");
+    {
+        char resp[64];
+        at_exchange(t, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,0,0000\r\n",
+                    resp, sizeof(resp));
+        at_exchange(t, "AT+DMOSETVOLUME=8\r\n", resp, sizeof(resp));
+    }
+
+    ESP_LOGI(kTag, "");
+    ESP_LOGI(kTag, "  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    ESP_LOGI(kTag, "  >> RX CAPTURE: 20-second operator window starting         <<");
+    ESP_LOGI(kTag, "  >> ACTION: Key your handheld radio on 144.390 MHz FM NOW  <<");
+    ESP_LOGI(kTag, "  >> Speak continuously or generate any FM audio signal.    <<");
+    ESP_LOGI(kTag, "  >> Hold PTT for at least 5-10 seconds.                    <<");
+    ESP_LOGI(kTag, "  >> Watch for  rx_peak_abs > 500  in the log below.        <<");
+    ESP_LOGI(kTag, "  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    vTaskDelay(pdMS_TO_TICKS(1000));  // 1 s grace before capture window
+
+    int32_t max_peak        = 0;
+    int32_t signal_seconds  = 0;
+
+    for (int s = 0; s < 20; ++s) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        const int32_t peak = rx_peak_fn ? rx_peak_fn() : 0;
+        if (peak > max_peak) max_peak = peak;
+        if (peak > 500) ++signal_seconds;
+        ESP_LOGI(kTag, "  [t+%2d s] rx_peak_abs=%" PRId32 "  %s",
+                 s + 1, peak,
+                 peak > 500  ? "<<< SIGNAL DETECTED" :
+                 peak > 100  ? "(low level)"          : "(silent / no signal)");
+    }
+
+    ESP_LOGI(kTag, "");
+    ESP_LOGI(kTag, "  RX CAPTURE RESULT: max_peak=%" PRId32
+             "  signal_seconds=%d/20  (threshold > 500)",
+             max_peak, signal_seconds);
+
+    if (signal_seconds >= 2) {
+        ESP_LOGI(kTag, "  >>> PASS: RX audio path confirmed — signal captured from SA818 AF_OUT.");
+    } else if (max_peak > 100) {
+        ESP_LOGW(kTag, "  >>> MARGINAL: Low-level signal only; check AF_RX_COUPLED wiring/level.");
+        ESP_LOGW(kTag, "       Possible: attenuation too high, or operator transmitted briefly.");
+    } else {
+        ESP_LOGE(kTag, "  >>> FAIL: No significant RX signal detected in 20-second window.");
+        if (!rx_peak_fn) {
+            ESP_LOGE(kTag, "       (rx_peak_fn not provided — stats came from fallback zero).");
+            ESP_LOGE(kTag, "       Pass the demod-loop peak callback in main.cpp to get live data.");
+        } else {
+            ESP_LOGE(kTag, "       Check: SA818 AF_OUT -> SGTL5000 LINE_IN_L AC coupling cap.");
+            ESP_LOGE(kTag, "       Check: Operator transmitted on 144.390 MHz FM.");
+            ESP_LOGE(kTag, "       Check: Squelch defeated (SQ=0 set above).");
+            ESP_LOGE(kTag, "       Check: audio_task demod loop running (g_i2s_tx_chan published).");
+        }
+    }
+
+    // Restore squelch=1.
+    ESP_LOGI(kTag, "  Restoring squelch=1...");
+    {
+        char resp[64];
+        at_exchange(t, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,1,0000\r\n",
+                    resp, sizeof(resp));
+    }
+    ESP_LOGI(kTag, "  Stage 6 complete.");
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -300,7 +377,8 @@ void run_sa818_bench(pakt::ISa818Transport &transport,
                      uart_port_t            uart_port,
                      const volatile void   *p_i2s_tx,
                      uint32_t               sample_rate_hz,
-                     uint32_t               tx_wait_ms)
+                     uint32_t               tx_wait_ms,
+                     RxPeakFn               rx_peak_fn)
 {
     ESP_LOGI(kTag, "");
     ESP_LOGI(kTag, "##############################################");
@@ -309,6 +387,7 @@ void run_sa818_bench(pakt::ISa818Transport &transport,
     ESP_LOGI(kTag, "  PTT GPIO  : GPIO%d (active-low)", static_cast<int>(ptt_gpio));
     ESP_LOGI(kTag, "  Baud      : 9600 8N1");
     ESP_LOGI(kTag, "  Audio path: LINE_OUT <-> SA818 AF_IN/AF_OUT");
+    ESP_LOGI(kTag, "  rx_peak_fn: %s", rx_peak_fn ? "provided" : "not provided");
     ESP_LOGI(kTag, "##############################################");
 
     // Stage 1 is required; skip audio stages if comms fail.
@@ -324,8 +403,11 @@ void run_sa818_bench(pakt::ISa818Transport &transport,
 
     if (comms_ok) {
         stage4_ptt_toggle(ptt_gpio);
-        stage5_rx_audio(transport);
-        stage6_tx_audio(ptt_gpio, p_i2s_tx, sample_rate_hz, tx_wait_ms);
+        // Stage 5 (TX) runs first: waits for I2S to be ready, then transmits
+        // the 10-tone sequence.  After this returns, audio_task's demod loop
+        // is live, so Stage 6 (RX) can read live peak stats via rx_peak_fn.
+        stage5_tx_audio_sequence(ptt_gpio, p_i2s_tx, sample_rate_hz, tx_wait_ms);
+        stage6_rx_audio_capture(transport, rx_peak_fn);
     }
 
     ESP_LOGI(kTag, "");

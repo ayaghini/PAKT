@@ -1,4 +1,0 @@
-info: Trying to set symbol ESP_WIFI_DYNAMIC_TX_BUFFER to n, but it is currently selected by choice ESP_WIFI_TX_BUFFER. For setting it to n, set another choice symbol to y instead.
-info: Trying to set symbol ESP_WIFI_STATIC_RX_MGMT_BUFFER to n, but it is currently selected by choice ESP_WIFI_MGMT_RX_BUFFER. For setting it to n, set another choice symbol to y instead.
-info: Trying to set symbol ESP_WIFI_TASK_PINNED_TO_CORE_0 to n, but it is currently selected by choice ESP_WIFI_TASK_CORE_ID. For setting it to n, set another choice symbol to y instead.
-info: Trying to set symbol WIFI_PROV_STA_ALL_CHANNEL_SCAN to n, but it is currently selected by choice WIFI_PROV_STA_SCAN_METHOD. For setting it to n, set another choice symbol to y instead.

@@ -1,5 +1,7 @@
 # Build artefacts
 build/
+build_*/
+firmware/build_*/
 dist/
 *.o
 *.a

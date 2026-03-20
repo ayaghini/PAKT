@@ -21,6 +21,6 @@ What this package is for:
 Important guardrails:
 
 - Treat native PAKT BLE and KISS-over-BLE as the two MVP integration surfaces.
-- Treat `doc/aprs_mvp_docs/payload_contracts.md` as the payload source of truth.
+- Treat `docs/aprs_mvp_docs/payload_contracts.md` as the payload source of truth.
 - Treat `firmware/main/main.cpp` and `firmware/components/*` as the truth for
   what is actually implemented versus stubbed.

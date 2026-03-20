@@ -36,6 +36,15 @@ public:
     // Reset all demodulator state (filters, timing, HDLC state machine).
     void reset();
 
+    // Cumulative diagnostic counters (monotonically increasing, never reset).
+    // Read from the same task that owns the demodulator (no sync needed).
+    struct DemodStats {
+        uint32_t flags;       // 0x7E patterns detected (proxy for AFSK lock)
+        uint32_t fcs_rejects; // frames assembled but CRC failed
+        uint32_t decoded;     // frames delivered to callback (FCS passed)
+    };
+    DemodStats stats() const;
+
 private:
     // ── Biquad bandpass filter (Direct Form II Transposed) ──────────────────
     struct Biquad {
@@ -91,6 +100,11 @@ private:
     int     bit_pos_;      // bit position within bit_buf_ (0–7)
     uint8_t frame_buf_[kMaxFrameBytes];
     size_t  frame_len_;    // bytes in frame_buf_ so far
+
+    // Diagnostic counters
+    uint32_t stat_flags_{0};
+    uint32_t stat_fcs_rejects_{0};
+    uint32_t stat_decoded_{0};
 };
 
 } // namespace pakt

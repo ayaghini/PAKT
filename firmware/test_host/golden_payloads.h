@@ -1,7 +1,7 @@
 #pragma once
 // golden_payloads.h – Canonical JSON test fixtures (P1)
 //
-// Single source-of-truth payload examples that match doc/aprs_mvp_docs/payload_contracts.md.
+// Single source-of-truth payload examples that match docs/aprs_mvp_docs/payload_contracts.md.
 // Include in any test file that needs representative BLE payload strings.
 //
 // All string literals are valid UTF-8 and match the schemas in payload_contracts.md.

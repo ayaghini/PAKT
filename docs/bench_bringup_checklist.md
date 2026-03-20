@@ -3,6 +3,10 @@
 Aligned with: `hardware/prototype_breakout_wiring_plan.md`
 Purpose: step-by-step validation sequence for first EVT prototype bring-up.
 
+Status source for what is already software-complete versus still hardware-gated:
+- `docs/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
+
 Each step lists the expected outcome and the failure mode to watch for.
 Record measured values in `docs/bench_measured_values_template.md`.
 
@@ -142,13 +146,14 @@ Record: MCLK frequency, BCLK frequency, WS frequency, and whether the measured v
 3. [ ] Run the firmware bench stages and confirm:
    - headphone tones are audible on the PJRC jack
    - `audio_bench` shows non-zero `peak` / `rms` values when `LINE_IN` is driven
-   - `sa818_bench` runs the short PTT and TX-audio stages only with a load or antenna attached
+   - `sa818_bench` runs the 10-tone TX sequence only with a load or antenna attached
+   - `sa818_bench` RX stage logs live `rx_peak_abs` values while a nearby radio transmits voice/audio
 4. [ ] Inject a 1200 Hz / 2200 Hz Bell 202 tone pair from PC audio into codec line in
 5. [ ] Monitor SA818 AF_IN level with AC voltmeter → adjust attenuator for ~100 mVpp (SA818 AF_IN nominal)
 6. [ ] Key SA818 TX; monitor TX deviation with calibrated reference receiver or RF power meter
 7. [ ] Target: ±3 kHz deviation for FM APRS (adjust R divider in AF_TX_COUPLED)
 
-Record: AF_TX_COUPLED attenuation setting, measured deviation, SA818 AF_OUT level into codec.
+Record: AF_TX_COUPLED attenuation setting, measured deviation, SA818 AF_OUT level into codec, and RX `max_peak` / `signal_seconds` from the bench log.
 
 ---
 
@@ -178,7 +183,26 @@ Record: time to first fix, sat count at fix, lat/lon vs known reference.
 6. [ ] Frame shows correct source callsign, destination, and text
 7. [ ] Repeat 5× while monitoring for resets, brownout events, or PTT stuck-on
 
-Record: decode success rate, any brownout or WDT reset events.
+Record: decode success rate, receiving device/app used, decoded packet text, and any brownout or WDT reset events.
+
+**Important:** hearing Bell 202 tones is not enough for Step 9 to pass; this step requires packet-level APRS decode on the receiving side.
+
+---
+
+## Step 9b — APRS RX listen window
+
+**Goal:** prove the prototype can decode on-air APRS packets, not just voice energy or generic RF audio.
+
+1. [ ] Tune the prototype to the APRS channel for your region (`144.390 MHz` in North America)
+2. [ ] Provide a real APRS source during the receive window:
+   - APRSdroid + HT audio/PTT interface
+   - a TNC-connected radio
+   - a second PAKT board transmitting APRS frames
+3. [ ] Transmit APRS packets every 20-30 seconds during the firmware RX bench window
+4. [ ] Confirm the prototype logs a decoded AX.25/APRS frame
+5. [ ] If no frame decodes, record whether `rx_peak_abs` changed anyway
+
+Record: APRS source used, packet interval, approximate distance, decoded frame examples if any, and `rx_peak_abs` behavior if decode fails.
 
 ---
 

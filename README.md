@@ -13,20 +13,53 @@ has now cleared the core codec and radio bring-up steps:
 - the desktop test app and KISS bridge are implemented as reference host tools
 - host-side software evidence is strong, with current docs recording `364/364` host tests passing
 - bench bring-up has confirmed SGTL5000 discovery and headphone output, shared I2C
-  visibility for the MAX17048 and M9N, SA818 UART handshake/config, and staged PTT/audio tests
+  visibility for the MAX17048 and M9N, SA818 UART handshake/config, staged PTT/audio tests,
+  and short APRS packet TX receipt on a separate receiver
+
+Today’s bench work materially improved the RF picture:
+- APRS packet TX has been bench-proven in at least one supervised setup
+- RX analog/audio activity reaches the demodulator and now has stronger instrumentation
+- on-device APRS RX is still not proven; current evidence points to remaining source-path
+  and receive-margin validation rather than a pure firmware modem defect
 
 The project is not MVP-complete yet because hardware validation still gates the milestone:
 - BLE security and PTT fail-safe validation on hardware
 - SA818 deviation and on-air receive/transmit calibration
-- end-to-end APRS RF validation
+- trusted Bell 202 source validation and on-device APRS RX proof
 - third-party KISS client validation
 
+## Project Status At A Glance
+
+| Area | Status | Notes |
+|---|---|---|
+| Core firmware architecture | `strong` | AX.25/APRS, AFSK, BLE, KISS-over-BLE, scheduling, and host tooling are implemented |
+| Bench bring-up | `in progress` | I2C, codec bring-up, SA818 UART/PTT, and staged audio tests are working |
+| APRS TX over RF | `partially proven` | short APRS packet burst reportedly decoded on a separate receiver |
+| APRS RX over RF | `not yet proven` | RX analog path is alive, but the prototype has not yet decoded a valid on-air APRS frame |
+| BLE/KISS hardware validation | `pending` | software-complete enough for hardware validation |
+| MVP milestone | `open` | blocked by RF validation, RX proof, BLE safety validation, and remaining hardware gates
+
+## Progress Summary
+- Software stack is largely implemented and test-backed.
+- Prototype hardware can boot the codec/radio path and transmit APRS packets over RF.
+- Demodulator instrumentation now exposes RX peak, flag, FCS-reject, and decode counters during bench work.
+- The repo now distinguishes clearly between:
+  - audio-path alive
+  - packet TX proven
+  - on-device APRS RX still unproven
+
+## Immediate Next Steps
+1. Re-run APRS RX validation with a trusted Bell 202 source whose modulation path is already known-good.
+2. Measure and record SA818 TX deviation under the actual `LINE_OUT -> AF_IN` attenuation network.
+3. If Bell 202 is present but RX still misses, tighten RX analog-level and demod-margin tuning.
+4. Resume BLE bonded-write and PTT fail-safe validation on live hardware.
+
 ## Current Status
-- Phase: prototype hardware bring-up in progress, with audio and basic SA818 control proven
+- Phase: prototype hardware bring-up in progress, with packet TX proven and RX troubleshooting focused on analog margin / trusted source validation
 - Firmware build flow: ESP-IDF with `idf.py`
 - Host test flow: raw CMake only for `firmware/test_host`
-- Canonical wire-format source: `doc/aprs_mvp_docs/payload_contracts.md`
-- Canonical implementation/risk ledger: `doc/aprs_mvp_docs/agent_bootstrap/audit.md`
+- Canonical wire-format source: `docs/aprs_mvp_docs/payload_contracts.md`
+- Canonical implementation/risk ledger: `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
 
 ## Bench-Proven Baseline
 - Feather target: Adafruit ESP32-S3 Feather `4 MB flash / 2 MB PSRAM`
@@ -50,40 +83,48 @@ The project is not MVP-complete yet because hardware validation still gates the 
 
 ## Next Steps
 - Measure and record SA818 TX deviation with the actual `LINE_OUT -> AF_IN` attenuation in place
-- Verify SA818 RX audio quality from `AF_OUT -> LINE_IN` with an on-frequency source
-- Run repeated APRS packet TX/RX tests with a reference receiver or SDR
+- Re-run APRS RX with a trusted Bell 202 source and confirm at least one on-device APRS decode
+- If needed, tune RX level/filter margin using the new peak/RMS/flag/FCS bench instrumentation
 - Validate BLE security enforcement and PTT watchdog behavior on the live hardware stack
-- Freeze the harness values into the PCB-facing docs once AF levels, bulk caps, and PTT topology are measured
+- Freeze the harness values into the PCB-facing docs once AF levels, deviation, and PTT topology are measured
 
 ## Start Here
-- `doc/aprs_mvp_docs/README.md`
-- `doc/aprs_mvp_docs/agent_bootstrap/README.md`
-- `doc/aprs_mvp_docs/agent_bootstrap/implementation_steps_mvp.md`
-- `doc/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
-- `doc/aprs_mvp_docs/agent_bootstrap/audit.md`
-- `doc/aprs_mvp_docs/docs/02_mvp_scope.md`
-- `doc/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
-- `doc/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
-- `doc/aprs_mvp_docs/payload_contracts.md`
+- `docs/README.md`
+- `docs/aprs_mvp_docs/README.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/README.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/implementation_steps_mvp.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
+- `docs/aprs_mvp_docs/docs/02_mvp_scope.md`
+- `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
+- `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
+- `docs/aprs_mvp_docs/payload_contracts.md`
 - `docs/dev_setup.md`
 - `docs/bench_bringup_checklist.md`
 - `hardware/prototyping_wiring.md`
 - `hardware/prototype_breakout_wiring_plan.md`
 
 ## Repository Layout
+- `docs/`: unified documentation home
 - `firmware/`: ESP-IDF firmware, host tests, and embedded integration code
 - `app/desktop_test/`: desktop BLE reference client and KISS bridge/harness
-- `doc/aprs_mvp_docs/docs/`: product, architecture, protocol, firmware, test, and risk docs
-- `doc/aprs_mvp_docs/agent_bootstrap/`: low-token onboarding pack, implementation sequence, gates, and audit log
-- `doc/aprs_mvp_docs/hardware/`: hardware interface notes and placeholder BOM
-- `docs/`: developer setup and bench bring-up procedures
+- `docs/aprs_mvp_docs/docs/`: product, architecture, protocol, firmware, test, and risk docs
+- `docs/aprs_mvp_docs/agent_bootstrap/`: low-token onboarding pack, implementation sequence, gates, and audit log
+- `docs/aprs_mvp_docs/hardware/`: hardware interface notes and placeholder BOM
+- `docs/hardware/`: hardware source library, CAD asset tracking, and reference links
+- `docs/dev_setup.md` + `docs/bench_bringup_checklist.md`: operator/developer companion docs
 - `hardware/`: practical prototyping wiring and hardware rationale
 - `handoff/agent_integration_package/`: external-agent handoff package for host-software integration work
 
 ## Working Rules
 - Use ESP-IDF `idf.py` for firmware builds; do not use raw CMake as the direct firmware entrypoint.
 - Use raw CMake only for pure-software host tests under `firmware/test_host`.
-- Keep `doc/aprs_mvp_docs/docs/05_ble_gatt_spec.md`,
-  `doc/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`, and
-  `doc/aprs_mvp_docs/payload_contracts.md` aligned with the implementation.
+- Keep `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`,
+  `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`, and
+  `docs/aprs_mvp_docs/payload_contracts.md` aligned with the implementation.
 - Prefer `firmware/main/main.cpp` and the component implementations as the source of truth for what is actually wired versus still hardware-gated.
+
+## Build Directories
+- `firmware/build_*` are the intended build output directories for the firmware project.
+- Repo-root `build_feather_s3/` is also an ESP-IDF-generated build tree for the same `firmware/` project, not a second source tree.
+- The metadata inside both `build_feather_s3/project_description.json` and `firmware/build_feather_s3/project_description.json` points back to `firmware/`; the difference is only the chosen build output path.

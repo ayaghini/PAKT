@@ -61,17 +61,17 @@ What appears software-complete or near-complete:
 - capability advertisement
 - TX scheduler and TX result encoding
 - APRS/AX.25/modem support code
+- KISS GATT service, KISS framing, and desktop KISS bridge/harness
 - SA818 command formatting/parsing
 - GPS parser
 - PTT watchdog/safe-off logic
 
 What is still stubbed or hardware-gated in `firmware/main/main.cpp`:
 
-- `audio_task`: stub
+- `audio_task`: SGTL5000/I2S bring-up and modem loop are wired, but runtime validation is still hardware-gated
 - `gps_task`: UART read placeholder
 - `power_task`: stub
-- `aprs_task`: TX path still uses a success-returning stub instead of a full
-  on-hardware RF/audio path
+- `aprs_task`: shared TX path is wired to the real AFSK/I2S/SA818 path, but live RF/audio validation is still hardware-gated
 - `Device Command` characteristic handler currently accepts writes but does not
   provide mature command execution behavior
 
@@ -102,10 +102,10 @@ Meaning for the external agent:
 - GPS live telemetry from real UART-fed fixes
 - power telemetry from live hardware
 
-### MVP target but not yet implemented
+### MVP target implemented in software, still pending hardware validation
 
 - KISS-over-BLE service
-- KISS framing/bridge validation
+- KISS framing/bridge validation against live hardware and a third-party client
 
 ### Not yet a current integration target
 

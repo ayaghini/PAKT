@@ -9,7 +9,7 @@ change. Use this file to know where to update the source docs.
 
 Primary source:
 
-- `doc/aprs_mvp_docs/payload_contracts.md`
+- `docs/aprs_mvp_docs/payload_contracts.md`
 
 Code that should stay aligned:
 
@@ -25,7 +25,7 @@ Code that should stay aligned:
 
 Primary sources:
 
-- `doc/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
+- `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
 - `firmware/components/ble_services/include/pakt/BleUuids.h`
 - `firmware/components/ble_services/BleServer.cpp`
 
@@ -34,14 +34,14 @@ Primary sources:
 Primary sources:
 
 - `firmware/main/main.cpp`
-- `doc/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
-- `doc/aprs_mvp_docs/agent_bootstrap/audit.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
+- `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
 
 ### Hardware interfaces and assumptions
 
 Primary sources:
 
-- `doc/aprs_mvp_docs/hardware/interfaces.md`
+- `docs/aprs_mvp_docs/hardware/interfaces.md`
 - `hardware/prototyping_wiring.md`
 - `hardware/prototype_breakout_wiring_plan.md`
 - `docs/bench_bringup_checklist.md`
@@ -50,8 +50,8 @@ Primary sources:
 
 Primary sources:
 
-- `doc/aprs_mvp_docs/docs/15_interoperability_matrix.md`
-- `doc/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
+- `docs/aprs_mvp_docs/docs/15_interoperability_matrix.md`
+- `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
 
 ## Known doc drift to watch
 
@@ -59,7 +59,7 @@ Primary sources:
 
 Current issue:
 
-- `doc/aprs_mvp_docs/docs/05_ble_gatt_spec.md` shows an older simple example
+- `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md` shows an older simple example
   for Device Capabilities
 - firmware and desktop app actually use:
   `{"fw_ver","hw_rev","protocol","features":[...]}`
@@ -90,13 +90,13 @@ If UUIDs, services, properties, or security change:
 
 1. update `firmware/components/ble_services/include/pakt/BleUuids.h`
 2. update `firmware/components/ble_services/BleServer.cpp`
-3. update `doc/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
+3. update `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
 4. update this package's `02_native_ble_protocol.md`
 5. update the desktop test app if host behavior changed
 
 If payload fields change:
 
-1. update `doc/aprs_mvp_docs/payload_contracts.md`
+1. update `docs/aprs_mvp_docs/payload_contracts.md`
 2. update firmware serializers/parsers/validators
 3. update desktop app parsers
 4. update/add tests
@@ -104,7 +104,7 @@ If payload fields change:
 
 If hardware wiring or internal buses change:
 
-1. update `doc/aprs_mvp_docs/hardware/interfaces.md`
+1. update `docs/aprs_mvp_docs/hardware/interfaces.md`
 2. update wiring docs under `hardware/`
 3. update `docs/bench_bringup_checklist.md`
 4. update this package's `01_onboarding_brief.md` if the integration-relevant
@@ -112,14 +112,14 @@ If hardware wiring or internal buses change:
 
 If project maturity/status changes:
 
-1. update `doc/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
-2. update `doc/aprs_mvp_docs/agent_bootstrap/audit.md`
+1. update `docs/aprs_mvp_docs/agent_bootstrap/gate_pass_matrix.md`
+2. update `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
 3. update this package's `03_current_software_and_app_status.md`
 
 ## Suggested handoff note for the next agent
 
 Use native PAKT BLE as the richer device integration path and treat
-KISS-over-BLE as an MVP interoperability path that still needs implementation.
-Read capabilities first, follow payload contracts, implement chunking, and
-treat hardware-validated behavior separately from software-complete but still
-stubbed paths.
+KISS-over-BLE as an MVP interoperability path whose software stack is in place
+but whose live hardware validation is still pending. Read capabilities first,
+follow payload contracts, implement chunking, and treat hardware-validated
+behavior separately from software-complete but still hardware-gated paths.

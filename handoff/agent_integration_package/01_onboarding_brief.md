@@ -40,7 +40,7 @@ Reason:
 
 - it is the currently defined and implemented protocol path
 - the desktop test app already uses it
-- KISS-over-BLE is now part of MVP, but it is not implemented yet
+- KISS-over-BLE is now part of MVP and the software path is implemented, but hardware validation and third-party interoperability evidence are still pending
 
 If the external software architecture is KISS-centric, build a thin adapter
 layer that maps:

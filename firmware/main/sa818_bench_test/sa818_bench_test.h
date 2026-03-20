@@ -12,9 +12,11 @@
 //   2. Version query   – AT+DMOVERQ (informational, not required to pass)
 //   3. Frequency config – 144.390 MHz simplex, 25 kHz BW, squelch 1
 //   4. PTT toggle      – 500 ms assert / deassert; GPIO state logged
-//   5. RX audio        – squelch open, volume max; operator transmits nearby
-//   6. TX audio        – brief 1 kHz tone via LINE_OUT → SA818 AF_IN
-//                        waits up to `tx_wait_ms` for I2S TX to become ready
+//   5. TX audio        – 10-tone stepped sequence (600–2400 Hz, 1 s each) via
+//                        LINE_OUT → SA818 AF_IN; waits up to `tx_wait_ms` for
+//                        I2S TX to become ready.
+//   6. RX audio        – squelch open, volume max; operator transmits nearby;
+//                        live peak_abs logged each second via optional rx_peak_fn.
 //
 // ── Usage ────────────────────────────────────────────────────────────────────
 //   Called from radio_task AFTER UART driver is installed and transport is
@@ -33,20 +35,29 @@
 
 namespace pakt::bench {
 
+// Optional callback used by Stage 6 (RX audio capture) to read the rolling
+// 1-second peak absolute value from the audio_task demod loop.
+// Signature: int32_t get_rx_peak_abs()
+// Return 0 (or leave nullptr) if stats are unavailable.
+using RxPeakFn = int32_t (*)();
+
 // Run the full SA818 staged bench test.
 //
 //   transport      – configured UART transport (radio_task creates this before calling)
 //   ptt_gpio       – active-low PTT GPIO (HIGH = off, LOW = TX asserted)
 //   uart_port      – used only for log display (communication is via transport)
 //   p_i2s_tx       – pointer to the global I2S TX handle; bench polls until
-//                    non-null for Stage 6. Pass nullptr to skip TX audio stage.
+//                    non-null for Stage 5 (TX audio). Pass nullptr to skip.
 //   sample_rate_hz – I2S sample rate (must match audio init; typically 8000)
 //   tx_wait_ms     – max milliseconds to wait for I2S TX to become available
+//   rx_peak_fn     – optional callback returning rolling 1-s RX peak_abs;
+//                    used by Stage 6 to display live capture stats.
 void run_sa818_bench(pakt::ISa818Transport &transport,
                      gpio_num_t             ptt_gpio,
                      uart_port_t            uart_port,
                      const volatile void   *p_i2s_tx,
                      uint32_t               sample_rate_hz,
-                     uint32_t               tx_wait_ms = 120000);
+                     uint32_t               tx_wait_ms = 120000,
+                     RxPeakFn               rx_peak_fn = nullptr);
 
 } // namespace pakt::bench

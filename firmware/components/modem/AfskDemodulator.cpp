@@ -171,6 +171,7 @@ void AfskDemodulator::process_bit(bool bit)
 
     if (sr_ == 0x7Eu) {
         // Flag detected: start or end a frame
+        ++stat_flags_;
         if (in_frame_ && frame_len_ >= 2) {
             dispatch_frame();
         }
@@ -239,9 +240,16 @@ void AfskDemodulator::dispatch_frame()
     uint16_t stored = static_cast<uint16_t>(frame_buf_[payload_len])
                     | (static_cast<uint16_t>(frame_buf_[payload_len + 1]) << 8);
     if (ax25::fcs(frame_buf_, payload_len) == stored) {
+        ++stat_decoded_;
         frame_cb_(frame_buf_, frame_len_);
+    } else {
+        ++stat_fcs_rejects_;
     }
-    // On FCS mismatch, silently drop the frame (logged at a higher layer)
+}
+
+AfskDemodulator::DemodStats AfskDemodulator::stats() const
+{
+    return { stat_flags_, stat_fcs_rejects_, stat_decoded_ };
 }
 
 } // namespace pakt

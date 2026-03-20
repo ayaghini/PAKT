@@ -88,13 +88,19 @@ Notes:
 
 | Measurement | Expected | Measured | Pass? |
 |-------------|----------|----------|-------|
+| 10-tone TX sequence heard on reference receiver | yes | | |
 | SA818 AF_IN level (1200 Hz) | ~100 mVpp | | |
 | TX deviation (APRS) | ±3 kHz | | |
 | Attenuator setting (R divider) | TBD | | |
 | SA818 AF_OUT level | TBD | | |
 | RC LPF cutoff (AF_RX path) | TBD | | |
+| RX bench `max_peak` | > 500 while receiving voice/audio | | |
+| RX bench `signal_seconds` | >= 2 s above threshold | | |
 
 Notes:
+
+- If using the new SA818 bench Stage 6, record the operator test details here:
+  transmitting radio used, approximate distance, and whether the signal was voice or tone.
 
 ---
 
@@ -115,12 +121,32 @@ Notes:
 | Measurement | Expected | Measured | Pass? |
 |-------------|----------|----------|-------|
 | Frame decoded by reference TNC | yes | | |
+| Reference receiver / decoder used | recorded | | |
+| Decoded APRS payload text | recorded | | |
 | Source callsign correct | matches config | | |
 | Decode success rate (5 TX) | 5/5 | | |
 | Resets during 5 TX sequence | 0 | | |
 | Brownout events | 0 | | |
 
 Notes:
+
+- Record the exact receiving device/app and decoded frame text here; hearing tones alone does not count.
+
+---
+
+## Step 9b — APRS RX listen window
+
+| Measurement | Expected | Measured | Pass? |
+|-------------|----------|----------|-------|
+| Real APRS source used during RX window | yes | | |
+| Prototype decoded at least 1 APRS frame | yes | | |
+| Example decoded frame text | recorded | | |
+| RX `max_peak` during APRS source test | non-zero / informative | | |
+
+Notes:
+
+- Do not mark this step pass if the operator only transmitted voice.
+- `rx_peak_abs` alone is not sufficient; at least one valid decoded APRS/AX.25 frame is required.
 
 ---
 

@@ -1,5 +1,0 @@
-/Users/mac4pro64/Desktop/pakt/PAKT/firmware/main/main.cpp: In function 'void radio_task(void*)':
-/Users/mac4pro64/Desktop/pakt/PAKT/firmware/main/main.cpp:226:5: warning: missing initializer for member 'uart_config_t::rx_flow_ctrl_thresh' [-Wmissing-field-initializers]
-  226 |     };
-      |     ^
-/Users/mac4pro64/Desktop/pakt/PAKT/firmware/main/main.cpp:226:5: warning: missing initializer for member 'uart_config_t::flags' [-Wmissing-field-initializers]
