@@ -5,6 +5,54 @@ Purpose: rolling implementation and verification ledger for the current MVP bran
 
 ---
 
+## Prototype bench workflow + RX recorder update (2026-03-20)
+
+Status: implemented in the repo during the current working session; firmware build re-verification was blocked by the local ESP-IDF environment on this machine.
+
+Firmware changes:
+- `firmware/main/bench_profile_config.h`
+  - new build-time bench/debug profile file
+  - controls whether `audio_bench`, `sa818_bench`, and `aprs_bench` run at boot
+  - APRS sub-stages can now be enabled independently:
+    - Stage 0 loopback
+    - Stage A TX burst
+    - Stage B RX gain sweep
+    - PCM snapshot dump
+    - Stage C full RX recorder/export
+  - Stage C ADC gain step is now configurable for targeted capture runs
+- `firmware/main/main.cpp`
+  - bench calls now respect the profile toggles
+  - full RX recorder upgraded from unsigned `8-bit` output to signed `16-bit` PCM WAV export
+
+Bench result/status impact:
+- the firmware is no longer forced through every bench stage on every debug boot
+- Stage C is now intended as a reusable targeted debug tool, not just a fixed late-stage bench step
+- the next APRS RX capture should preserve much more waveform detail than the earlier `8-bit` recorder
+
+Current local limitation:
+- attempted local firmware re-build was blocked because the ESP-IDF activation on this machine currently fails with:
+  - missing `/Users/macmini4/.espressif/espidf.constraints.v5.5.txt`
+- so this audit item records code/documentation state, not a fresh hardware-verified flash
+
+## RX WAV analysis follow-up (2026-03-20)
+
+Status: extracted and inspected from a saved serial capture during the current working session.
+
+Captured artifact:
+- saved WAV exported from Stage C:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/rx_capture_2026-03-20_092235.wav`
+
+Observed characteristics of the saved `8-bit` capture:
+- clear burst timing aligned with operator transmissions
+- strongest spectral energy concentrated at very low frequencies (roughly `50-150 Hz`)
+- essentially zero `1200 Hz` / `2200 Hz` Bell 202 energy in the strongest windows
+- very low zero-crossing counts in the most active windows, inconsistent with clean APRS AFSK
+
+Conservative interpretation:
+- the prototype is receiving something during those windows, but the saved demod-input waveform does not yet look like clean Bell 202
+- because that capture was recorded at `0 dB` ADC gain and through the older `8-bit` recorder, it should not be treated as the final RF diagnosis
+- the next meaningful test is a new capture with the `16-bit` recorder and a deliberate Stage C gain choice matched to the best observed RX margin
+
 ## Prototype radio-audio bench pass (reported 2026-03-19)
 
 Status: reported by agent, not independently re-run in this review session.

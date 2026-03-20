@@ -1,7 +1,7 @@
 # MVP Gate Pass Matrix
 
-Generated: 2026-03-19
-Agent step: Step 9+ prototype radio-audio bench follow-up
+Generated: 2026-03-20
+Agent step: Step 9+ prototype radio-audio bench follow-up and RX recorder workflow update
 
 Legend:
 - `pass`    — verified in software / CI; no hardware required
@@ -31,12 +31,12 @@ Legend:
 |---|---|---|
 | Beacon TX decodes on known-good receiver | **partial** | Reported 2026-03-19 bench pass indicates a short APRS packet burst was received on a separate APRS-capable receiver, so packet-level TX proof now exists in at least one supervised bench setup. Deviation measurement and repeatability are still open before promoting this to a fully closed gate item. |
 | SGTL5000 SYS_MCLK + sample-rate stable across reconnect | **partial** | Reported 2026-03-19 bench pass indicates SGTL5000 audio path is live enough for 10-tone TX and RX signal-presence monitoring on hardware. Reconnect/long-run sample-rate stability is still unverified. Dependency: FW-004 Step 2 follow-up. |
-| RX decode stream reaches app | **partial** | `audio_task` now wired: SGTL5000 I2C init + I2S RX channel + `AfskDemodulator` instantiated; decoded frames pushed to `g_rx_ax25_queue`; `aprs_task` already drains queue and forwards to BLE notify + KISS RX. Reported 2026-03-19 bench work shows hardware RX signal energy reaching the SGTL5000/I2S path (`rx_peak_abs`) and now includes flag/FCS/decode instrumentation, but no valid on-air APRS frame has yet been decoded by the prototype, so app-level APRS RX remains unproven. |
+| RX decode stream reaches app | **partial** | `audio_task` now wired: SGTL5000 I2C init + I2S RX channel + `AfskDemodulator` instantiated; decoded frames pushed to `g_rx_ax25_queue`; `aprs_task` already drains queue and forwards to BLE notify + KISS RX. Reported 2026-03-19/20 bench work shows hardware RX signal energy reaching the SGTL5000/I2S path, plus peak/flag/FCS/decode instrumentation and PSRAM-backed WAV export. No valid on-air APRS frame has yet been decoded by the prototype, so app-level APRS RX remains unproven. |
 | Message send/ack/timeout states correct | **partial** | TxScheduler FSM + MessageTracker fully tested in software (26+37 tests). End-to-end ack flow requires hardware. |
 | KISS-over-BLE exchanges frames with reference client | **partial** | KISS software stack complete end-to-end (2026-03-16 pass 2–4): KissFramer (37 host tests), KISS GATT service in BleServer, KISS TX decoded+enqueued into AprsTaskContext raw-AX.25 ring (35 host tests), KISS RX drain loop wired in aprs_task (notifies both native rx_packet and KISS RX clients), notify_kiss_rx sends proper INT-002 chunks, desktop kiss_bridge.py reassembles multi-chunk KISS RX frames (50 Python tests). Real AFSK TX path now wired (pass 4): RadioTxFn and RawTxFn stubs replaced with `afsk_tx_frame()` (Sa818Radio.ptt + AfskModulator + I2S write + PTT release). Hardware-gated: real audio RX pipeline (Ax25RxQueue producer blocked until SGTL5000 hardware present), third-party client validation (APRSdroid/Direwolf/YAAC). Dependency: HW-010 |
 | Controlled-condition beacon decode ≥ 95% | **blocked** | Still unverified. Reported 2026-03-19 bench work now includes packet-level TX proof on a separate receiver, but not repeated controlled-condition decode-rate validation and not on-device APRS RX proof. Dependency: FW-006, FW-004, HW-010 |
 
-**G1 assessment:** Hardware progress is now meaningful but still incomplete: reported bench work shows supervised RF tone TX, packet-level APRS TX reception on a separate receiver, and RX signal presence through the codec/radio path. MVP functional proof is still open because calibrated deviation, on-device APRS RX decode, stored RX audio evidence, and end-to-end message flows remain unverified.
+**G1 assessment:** Hardware progress is now meaningful but still incomplete: reported bench work shows supervised RF tone TX, packet-level APRS TX reception on a separate receiver, RX signal presence through the codec/radio path, and stored RX audio evidence via the new recorder/export path. MVP functional proof is still open because calibrated deviation, clean Bell 202 confirmation at the prototype input, on-device APRS RX decode, and end-to-end message flows remain unverified.
 
 ---
 
@@ -119,7 +119,8 @@ The CI pipeline constitutes the regression suite for firmware releases:
 
 **Next unblocking action:** Prototype hardware follow-up on the radio/audio path. Priority order for the next bench session:
 1. Measure TX deviation against a calibrated receiver or service monitor
-2. Repeat APRS RX validation with a trusted Bell 202 APRS source during the receive window
-3. Upgrade RX verification from signal-presence only to stored audio capture and/or packet decode proof
-4. Check SGTL5000/I2S reconnect and long-run clock stability
-5. Resume G3 critical-path checks: BLE bonded-write rejection and PTT safe-off fault test
+2. Re-run APRS RX with a trusted Bell 202 source using the new `16-bit` Stage C recorder at the most promising ADC gain
+3. Confirm whether the saved WAV shows real 1200/2200 Hz Bell 202 at the demod input
+4. If Bell 202 is present but decode still fails, tune RX analog margin and demod thresholds
+5. Check SGTL5000/I2S reconnect and long-run clock stability
+6. Resume G3 critical-path checks: BLE bonded-write rejection and PTT safe-off fault test

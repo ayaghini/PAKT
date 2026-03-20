@@ -45,6 +45,7 @@ env/
 *~
 .DS_Store
 Thumbs.db
+tmp/
 
 # Secrets / local overrides
 *.env

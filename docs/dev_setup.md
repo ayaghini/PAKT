@@ -114,6 +114,30 @@ idf.py build
 Build output: `firmware/build/pakt.bin`, `pakt.elf`, `pakt.map`.
 No device connection is needed for a build-only check.
 
+### 4.1 Bench/debug stage selection
+
+The prototype firmware now supports build-time selection of which blocking bench
+stages run at boot. Edit:
+
+- `firmware/main/bench_profile_config.h`
+
+This file controls:
+
+- top-level benches: `audio_bench`, `sa818_bench`, `aprs_bench`
+- APRS sub-stages: Stage 0 loopback, Stage A TX burst, Stage B RX gain sweep,
+  PCM snapshot logging, and Stage C full RX recorder/export
+- Stage C ADC gain step for targeted capture runs
+
+Recommended workflow for focused debugging:
+
+1. Edit `firmware/main/bench_profile_config.h`
+2. Disable benches you do not want for this session
+3. Rebuild with `idf.py build`
+4. Flash and monitor the targeted run only
+
+This is the preferred path for prototype debug work instead of commenting bench
+code in `main.cpp`.
+
 ---
 
 ## 5. CI pipeline (reference)

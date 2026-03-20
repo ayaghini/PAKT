@@ -43,6 +43,8 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - Software stack is largely implemented and test-backed.
 - Prototype hardware can boot the codec/radio path and transmit APRS packets over RF.
 - Demodulator instrumentation now exposes RX peak, flag, FCS-reject, and decode counters during bench work.
+- Bench stages are now selectable through [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h), so debug sessions can run only the needed benches/stages instead of the full boot-time sequence.
+- Full RX recorder/export now works through PSRAM-backed WAV capture, and the firmware can export the captured demod-input audio as base64 WAV over serial for offline analysis.
 - The repo now distinguishes clearly between:
   - audio-path alive
   - packet TX proven
@@ -53,6 +55,19 @@ The project is not MVP-complete yet because hardware validation still gates the 
 2. Measure and record SA818 TX deviation under the actual `LINE_OUT -> AF_IN` attenuation network.
 3. If Bell 202 is present but RX still misses, tighten RX analog-level and demod-margin tuning.
 4. Resume BLE bonded-write and PTT fail-safe validation on live hardware.
+
+## Bench Profile
+- Bench/debug stage selection is controlled in [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h).
+- Current toggles allow independent enable/disable of:
+  - `audio_bench`
+  - `sa818_bench`
+  - `aprs_bench`
+  - APRS Stage 0 loopback
+  - APRS Stage A TX burst
+  - APRS Stage B RX gain sweep
+  - APRS PCM snapshot dump
+  - APRS Stage C full RX recorder/export
+- Stage C also has a selectable ADC gain step so targeted RX captures can be taken at the most useful receive setting.
 
 ## Current Status
 - Phase: prototype hardware bring-up in progress, with packet TX proven and RX troubleshooting focused on analog margin / trusted source validation

@@ -22,6 +22,15 @@ CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
 # 3 = INFO; change to 4 (DEBUG) for development builds
 CONFIG_LOG_DEFAULT_LEVEL=3
 
+# ── External PSRAM (Adafruit ESP32-S3 Feather 4 MB flash / 2 MB PSRAM) ─────
+# Keep PSRAM available via heap_caps_malloc(..., MALLOC_CAP_SPIRAM) so large
+# debug buffers such as the RX recorder do not consume scarce internal RAM.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_TYPE_AUTO=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+
 # ── C++ support ──────────────────────────────────────────────────────────────
 CONFIG_COMPILER_CXX_EXCEPTIONS=y
 CONFIG_COMPILER_CXX_RTTI=n

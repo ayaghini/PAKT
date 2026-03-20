@@ -1,6 +1,6 @@
 # MVP Gap Analysis — Firmware, Protocols, and KISS TNC
 
-Date: 2026-03-19
+Date: 2026-03-20
 Purpose: make the remaining implementation gaps explicit so an agent can begin work immediately.
 
 ## 1. Scope
@@ -58,6 +58,7 @@ The project is therefore not MVP-complete until:
 - I2S/codec driver is wired
 - short APRS packet TX is now bench-proven on a separate receiver
 - receive-side analog path is active and now has bench instrumentation for peak/flag/FCS/decode counters
+- a PSRAM-backed RX WAV export path now exists for offline analysis, and bench stages are now selectable through `firmware/main/bench_profile_config.h`
 - SGTL5000 clock validation, gain tuning, trusted Bell 202 source validation, and final on-device APRS RX proof remain gating work
 
 ## 3. Protocol gaps
@@ -112,6 +113,7 @@ Hardware-gated remaining items:
 - SA818 + SGTL5000 electrical/audio validation under real RF conditions
 - trusted Bell 202 source confirmation into the prototype RX path
 - on-device APRS RX decode proof
+- final confirmation that the new `16-bit` Stage C recorder captures clean Bell 202 at the demod input
 
 ## 6. Agent-ready next tasks
 

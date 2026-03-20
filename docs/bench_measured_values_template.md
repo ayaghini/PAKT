@@ -142,11 +142,16 @@ Notes:
 | Prototype decoded at least 1 APRS frame | yes | | |
 | Example decoded frame text | recorded | | |
 | RX `max_peak` during APRS source test | non-zero / informative | | |
+| 30 s RX WAV exported | if needed | | |
+| WAV capture format | preferably 16-bit / 8 kHz mono | | |
+| Recorder ADC gain step | recorded | | |
+| Saved WAV path | recorded | | |
 
 Notes:
 
 - Do not mark this step pass if the operator only transmitted voice.
 - `rx_peak_abs` alone is not sufficient; at least one valid decoded APRS/AX.25 frame is required.
+- If a WAV export was captured, record where the serial log containing the base64 dump was saved.
 
 ---
 

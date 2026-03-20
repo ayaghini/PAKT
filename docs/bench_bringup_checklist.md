@@ -10,6 +10,11 @@ Status source for what is already software-complete versus still hardware-gated:
 Each step lists the expected outcome and the failure mode to watch for.
 Record measured values in `docs/bench_measured_values_template.md`.
 
+Bench selection note:
+- Blocking bench stages are now configurable in `firmware/main/bench_profile_config.h`.
+- For focused debug runs, disable unrelated stages before rebuilding/flashing.
+- APRS Stage C can now be run as an isolated recorder/export workflow and has a configurable ADC gain step.
+
 ---
 
 ## Pre-power checklist (bench setup)
@@ -201,8 +206,10 @@ Record: decode success rate, receiving device/app used, decoded packet text, and
 3. [ ] Transmit APRS packets every 20-30 seconds during the firmware RX bench window
 4. [ ] Confirm the prototype logs a decoded AX.25/APRS frame
 5. [ ] If no frame decodes, record whether `rx_peak_abs` changed anyway
+6. [ ] If deeper analysis is needed, run the 30-second RX recorder stage and save the emitted base64 WAV dump from serial for offline analysis
+7. [ ] Prefer the `16-bit` Stage C recorder path for new captures; use the selected ADC gain step in `bench_profile_config.h` to match the best observed RX margin
 
-Record: APRS source used, packet interval, approximate distance, decoded frame examples if any, and `rx_peak_abs` behavior if decode fails.
+Record: APRS source used, packet interval, approximate distance, decoded frame examples if any, `rx_peak_abs` behavior if decode fails, and whether a 30-second WAV capture was exported.
 
 ---
 

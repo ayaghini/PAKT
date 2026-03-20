@@ -1,6 +1,6 @@
 # APRS 2m Pocket TNC + Tracker (SA818 + ESP32-S3 + GPS) - MVP Docs
 
-Last updated: 2026-03-19
+Last updated: 2026-03-20
 
 This folder contains the working documentation set for a standalone APRS
 (1200 baud AFSK, AX.25) 2m device that exposes BLE interfaces to desktop and phone clients,
@@ -62,7 +62,8 @@ The bootstrap pack includes:
 - Contracts: `payload_contracts.md` is the canonical JSON schema source for BLE payloads.
 - Hardware: bench bring-up and RF/electrical validation remain the main gating steps.
 - RF status: short APRS packet TX has now been bench-proven on a separate receiver; on-device APRS RX is still open.
-- RX diagnosis status: current bench evidence shows the receive analog path is alive and instrumented, but a trusted Bell 202 source still needs to be confirmed at the prototype input before RX can be closed.
+- RX diagnosis status: current bench evidence shows the receive analog path is alive, instrumented, and now recordable via a PSRAM-backed WAV export path. On-device APRS RX is still open.
+- Bench workflow status: blocking bench stages are now selectable through `firmware/main/bench_profile_config.h`, so prototype debug runs can be narrowed to only the needed stages.
 - Interop: KISS-over-BLE is part of MVP and is software-complete enough for hardware validation; third-party client evidence is still pending.
 
 ## Documentation split
@@ -85,7 +86,7 @@ The bootstrap pack includes:
 - MVP gate: open
 - Strongest validated RF result so far: external APRS packet reception from the prototype TX path
 - Most important missing RF result: on-device APRS RX decode
-- Main next verification step: repeat Stage B with a trusted Bell 202 APRS source and close the RX margin question
+- Main next verification step: repeat Stage B/Stage C with the new `16-bit` recorder enabled and a trusted Bell 202 APRS source, then close the RX margin question
 
 ## What this is / is not
 - A practical starting point for hardware + firmware implementation
