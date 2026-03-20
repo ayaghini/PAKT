@@ -1,0 +1,421 @@
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+  126 | };
+      | ^
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::access_cb' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:126:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+  148 | };
+      | ^
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::access_cb' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:148:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+In file included from /Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_hs_adv.h:24,
+                 from /Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_gap.h:32,
+                 from /Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_hs.h:33,
+                 from /Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:10:
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:152:22: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  152 |         .uuid      = BLE_UUID16_DECLARE(0x2A29), // Manufacturer Name
+      |                      ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:157:22: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  157 |         .uuid      = BLE_UUID16_DECLARE(0x2A24), // Model Number
+      |                      ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:162:22: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  162 |         .uuid      = BLE_UUID16_DECLARE(0x2A26), // Firmware Revision
+      |                      ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+  167 | };
+      | ^
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::access_cb' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:167:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+  186 | };
+      | ^
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: error: designator order for field 'ble_gatt_chr_def::flags' does not match declaration order in 'const ble_gatt_chr_def'
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::access_cb' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::arg' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::descriptors' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::flags' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::min_key_size' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::val_handle' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:186:1: warning: missing initializer for member 'ble_gatt_chr_def::cpfd' [-Wmissing-field-initializers]
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:191:28: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  191 |         .uuid            = BLE_UUID16_DECLARE(0x180A),
+      |                            ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::includes' [-Wmissing-field-initializers]
+  210 | };
+      | ^
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::includes' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::includes' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::includes' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::uuid' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::includes' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:210:1: warning: missing initializer for member 'ble_gatt_svc_def::characteristics' [-Wmissing-field-initializers]
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'int gap_event_cb(ble_gap_event*, void*)':
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:281:17: error: 'uint16_t pakt::BleServer::conn_handle_' is private within this context
+  281 |             srv.conn_handle_ = event->connect.conn_handle;
+      |                 ^~~~~~~~~~~~
+In file included from /Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:5:
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:104:14: note: declared private here
+  104 |     uint16_t conn_handle_          = 0xFFFF; // BLE_HS_CONN_HANDLE_NONE
+      |              ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:282:17: error: 'bool pakt::BleServer::connected_' is private within this context
+  282 |             srv.connected_   = true;
+      |                 ^~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:105:14: note: declared private here
+  105 |     bool     connected_            = false;
+      |              ^~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:283:17: error: 'bool pakt::BleServer::bonded_' is private within this context
+  283 |             srv.bonded_      = false;
+      |                 ^~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:106:14: note: declared private here
+  106 |     bool     bonded_               = false;
+      |              ^~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:286:44: error: 'char pakt::BleServer::device_name_ [32]' is private within this context
+  286 |             start_advertising_internal(srv.device_name_);
+      |                                            ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:102:14: note: declared private here
+  102 |     char     device_name_[32]{};
+      |              ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:292:13: error: 'uint16_t pakt::BleServer::conn_handle_' is private within this context
+  292 |         srv.conn_handle_ = 0xFFFF;
+      |             ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:104:14: note: declared private here
+  104 |     uint16_t conn_handle_          = 0xFFFF; // BLE_HS_CONN_HANDLE_NONE
+      |              ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:293:13: error: 'bool pakt::BleServer::connected_' is private within this context
+  293 |         srv.connected_   = false;
+      |             ^~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:105:14: note: declared private here
+  105 |     bool     connected_            = false;
+      |              ^~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:294:13: error: 'bool pakt::BleServer::bonded_' is private within this context
+  294 |         srv.bonded_      = false;
+      |             ^~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:106:14: note: declared private here
+  106 |     bool     bonded_               = false;
+      |              ^~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:298:40: error: 'char pakt::BleServer::device_name_ [32]' is private within this context
+  298 |         start_advertising_internal(srv.device_name_);
+      |                                        ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:102:14: note: declared private here
+  102 |     char     device_name_[32]{};
+      |              ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:301:10: error: 'BLE_GAP_EVENT_ENCRYPT_CHANGE' was not declared in this scope; did you mean 'BLE_GAP_EVENT_ENC_CHANGE'?
+  301 |     case BLE_GAP_EVENT_ENCRYPT_CHANGE:
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |          BLE_GAP_EVENT_ENC_CHANGE
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:305:21: error: 'bool pakt::BleServer::bonded_' is private within this context
+  305 |                 srv.bonded_ = desc.sec_state.bonded;
+      |                     ^~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:106:14: note: declared private here
+  106 |     bool     bonded_               = false;
+      |              ^~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:314:59: error: 'struct ble_gap_repeat_pairing' has no member named 'conn_desc'
+  314 |         ble_store_util_delete_peer(&event->repeat_pairing.conn_desc.peer_id_addr);
+      |                                                           ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'int dis_access_cb(uint16_t, uint16_t, ble_gatt_access_ctxt*, void*)':
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:338:28: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  338 |     if (ble_uuid_cmp(uuid, BLE_UUID16_DECLARE(0x2A29)) == 0) str = "PAKT";
+      |                            ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:339:33: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  339 |     else if (ble_uuid_cmp(uuid, BLE_UUID16_DECLARE(0x2A24)) == 0) str = "APRS-TNC-1";
+      |                                 ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:109:5: error: taking address of rvalue [-fpermissive]
+  109 |     {                                   \
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  110 |         .u = {                          \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |             .type = BLE_UUID_TYPE_16,   \
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |         },                              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  113 |         .value = (uuid16),              \
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  114 |     }
+      |     ~
+/Users/mac4pro64/esp/esp-idf/components/bt/host/nimble/nimble/nimble/host/include/host/ble_uuid.h:149:38: note: in expansion of macro 'BLE_UUID16_INIT'
+  149 |     ((ble_uuid_t *) (&(ble_uuid16_t) BLE_UUID16_INIT(uuid16)))
+      |                                      ^~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:340:33: note: in expansion of macro 'BLE_UUID16_DECLARE'
+  340 |     else if (ble_uuid_cmp(uuid, BLE_UUID16_DECLARE(0x2A26)) == 0) str = "0.1.0";
+      |                                 ^~~~~~~~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'int aprs_access_cb(uint16_t, uint16_t, ble_gatt_access_ctxt*, void*)':
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:357:22: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  357 |             if (!srv.handlers_.on_config_read) return BLE_ATT_ERR_UNLIKELY;
+      |                      ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:359:28: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  359 |             size_t n = srv.handlers_.on_config_read(buf, sizeof(buf));
+      |                            ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:366:21: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  366 |             if (srv.handlers_.on_caps_read) {
+      |                     ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:367:25: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  367 |                 n = srv.handlers_.on_caps_read(buf, sizeof(buf));
+      |                         ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:405:17: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  405 |         if (srv.handlers_.on_command && !srv.handlers_.on_command(buf, buf_len)) {
+      |                 ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:405:46: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  405 |         if (srv.handlers_.on_command && !srv.handlers_.on_command(buf, buf_len)) {
+      |                                              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'void on_ble_sync()':
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:479:36: error: 'char pakt::BleServer::device_name_ [32]' is private within this context
+  479 |     start_advertising_internal(srv.device_name_);
+      |                                    ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:102:14: note: declared private here
+  102 |     char     device_name_[32]{};
+      |              ^~~~~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'void on_config_chunk_complete(const uint8_t*, size_t)':
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:499:13: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  499 |     if (srv.handlers_.on_config_write) {
+      |             ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:500:13: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  500 |         srv.handlers_.on_config_write(data, len);
+      |             ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'void on_tx_req_chunk_complete(const uint8_t*, size_t)':
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:507:13: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  507 |     if (srv.handlers_.on_tx_request) {
+      |             ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:508:13: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  508 |         srv.handlers_.on_tx_request(data, len);
+      |             ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp: In function 'void on_kiss_tx_chunk_complete(const uint8_t*, size_t)':
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:515:13: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  515 |     if (srv.handlers_.on_kiss_tx) {
+      |             ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/BleServer.cpp:516:13: error: 'pakt::BleServer::Handlers pakt::BleServer::handlers_' is private within this context
+  516 |         srv.handlers_.on_kiss_tx(data, len);
+      |             ^~~~~~~~~
+/Users/mac4pro64/Desktop/pakt/PAKT/firmware/components/ble_services/include/pakt/BleServer.h:101:14: note: declared private here
+  101 |     Handlers handlers_;
+      |              ^~~~~~~~~
+make[2]: *** [esp-idf/ble_services/CMakeFiles/__idf_ble_services.dir/BleServer.cpp.obj] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[1]: *** [esp-idf/ble_services/CMakeFiles/__idf_ble_services.dir/all] Error 2
+make[1]: *** Waiting for unfinished jobs....
+make: *** [all] Error 2

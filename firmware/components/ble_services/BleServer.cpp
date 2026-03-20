@@ -48,6 +48,10 @@ static const ble_uuid128_t uuid_power_telem  = UUID128(pakt::uuids::kPowerTeleme
 static const ble_uuid128_t uuid_system_telem = UUID128(pakt::uuids::kSystemTelemetry);
 static const ble_uuid128_t uuid_kiss_rx      = UUID128(pakt::uuids::kKissRx);
 static const ble_uuid128_t uuid_kiss_tx      = UUID128(pakt::uuids::kKissTx);
+static const ble_uuid16_t uuid_dis_svc       = BLE_UUID16_INIT(0x180A);
+static const ble_uuid16_t uuid_mfr_name      = BLE_UUID16_INIT(0x2A29);
+static const ble_uuid16_t uuid_model_number  = BLE_UUID16_INIT(0x2A24);
+static const ble_uuid16_t uuid_fw_revision   = BLE_UUID16_INIT(0x2A26);
 
 // ── GATT access callback declarations ────────────────────────────────────────
 
@@ -82,45 +86,45 @@ static const struct ble_gatt_chr_def aprs_chars[] = {
     {
         .uuid        = &uuid_dev_config.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_dev_config,
         .flags       = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+        .val_handle  = &g_h_dev_config,
     },
     {
         .uuid        = &uuid_dev_command.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_dev_command,
         .flags       = BLE_GATT_CHR_F_WRITE_NO_RSP,
+        .val_handle  = &g_h_dev_command,
     },
     {
         .uuid        = &uuid_dev_status.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_dev_status,
         .flags       = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle  = &g_h_dev_status,
     },
     {
         // Device Capabilities: read-only, no security restriction (INT-001).
         .uuid        = &uuid_dev_caps.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_dev_caps,
         .flags       = BLE_GATT_CHR_F_READ,
+        .val_handle  = &g_h_dev_caps,
     },
     {
         .uuid        = &uuid_rx_packet.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_rx_packet,
         .flags       = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle  = &g_h_rx_packet,
     },
     {
         .uuid        = &uuid_tx_request.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_tx_request,
         .flags       = BLE_GATT_CHR_F_WRITE,
+        .val_handle  = &g_h_tx_request,
     },
     {
         .uuid        = &uuid_tx_result.u,
         .access_cb   = aprs_access_cb,
-        .val_handle  = &g_h_tx_result,
         .flags       = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle  = &g_h_tx_result,
     },
     { 0 } // terminator
 };
@@ -129,37 +133,37 @@ static const struct ble_gatt_chr_def telm_chars[] = {
     {
         .uuid       = &uuid_gps_telem.u,
         .access_cb  = telm_access_cb,
-        .val_handle = &g_h_gps_telem,
         .flags      = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &g_h_gps_telem,
     },
     {
         .uuid       = &uuid_power_telem.u,
         .access_cb  = telm_access_cb,
-        .val_handle = &g_h_power_telem,
         .flags      = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &g_h_power_telem,
     },
     {
         .uuid       = &uuid_system_telem.u,
         .access_cb  = telm_access_cb,
-        .val_handle = &g_h_system_telem,
         .flags      = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &g_h_system_telem,
     },
     { 0 } // terminator
 };
 
 static const struct ble_gatt_chr_def dis_chars[] = {
     {
-        .uuid      = BLE_UUID16_DECLARE(0x2A29), // Manufacturer Name
+        .uuid      = &uuid_mfr_name.u, // Manufacturer Name
         .access_cb = dis_access_cb,
         .flags     = BLE_GATT_CHR_F_READ,
     },
     {
-        .uuid      = BLE_UUID16_DECLARE(0x2A24), // Model Number
+        .uuid      = &uuid_model_number.u, // Model Number
         .access_cb = dis_access_cb,
         .flags     = BLE_GATT_CHR_F_READ,
     },
     {
-        .uuid      = BLE_UUID16_DECLARE(0x2A26), // Firmware Revision
+        .uuid      = &uuid_fw_revision.u, // Firmware Revision
         .access_cb = dis_access_cb,
         .flags     = BLE_GATT_CHR_F_READ,
     },
@@ -173,14 +177,14 @@ static const struct ble_gatt_chr_def kiss_chars[] = {
     {
         .uuid       = &uuid_kiss_rx.u,
         .access_cb  = kiss_access_cb,
-        .val_handle = &g_h_kiss_rx,
         .flags      = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &g_h_kiss_rx,
     },
     {
         .uuid       = &uuid_kiss_tx.u,
         .access_cb  = kiss_access_cb,
-        .val_handle = &g_h_kiss_tx,
         .flags      = BLE_GATT_CHR_F_WRITE,
+        .val_handle = &g_h_kiss_tx,
     },
     { 0 } // terminator
 };
@@ -188,7 +192,7 @@ static const struct ble_gatt_chr_def kiss_chars[] = {
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     { // Device Information Service
         .type            = BLE_GATT_SVC_TYPE_PRIMARY,
-        .uuid            = BLE_UUID16_DECLARE(0x180A),
+        .uuid            = &uuid_dis_svc.u,
         .characteristics = dis_chars,
     },
     { // APRS Service
@@ -278,31 +282,27 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status == 0) {
             ESP_LOGI(TAG, "connected: handle=%d", event->connect.conn_handle);
-            srv.conn_handle_ = event->connect.conn_handle;
-            srv.connected_   = true;
-            srv.bonded_      = false;
+            srv.set_connected(event->connect.conn_handle, false);
         } else {
             ESP_LOGW(TAG, "connect failed: %d", event->connect.status);
-            start_advertising_internal(srv.device_name_);
+            start_advertising_internal(srv.device_name());
         }
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnected: reason=%d", event->disconnect.reason);
-        srv.conn_handle_ = 0xFFFF;
-        srv.connected_   = false;
-        srv.bonded_      = false;
+        srv.clear_connection();
         g_config_chunker.reset();
         g_tx_req_chunker.reset();
         g_kiss_tx_chunker.reset();
-        start_advertising_internal(srv.device_name_);
+        start_advertising_internal(srv.device_name());
         break;
 
-    case BLE_GAP_EVENT_ENCRYPT_CHANGE:
+    case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0) {
             struct ble_gap_conn_desc desc{};
             if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
-                srv.bonded_ = desc.sec_state.bonded;
+                srv.set_bonded(desc.sec_state.bonded);
                 ESP_LOGI(TAG, "encrypt change: encrypted=%d bonded=%d",
                          (int)desc.sec_state.encrypted, (int)desc.sec_state.bonded);
             }
@@ -311,7 +311,12 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
 
     case BLE_GAP_EVENT_REPEAT_PAIRING:
         // Accept re-pairing by deleting the old bond.
-        ble_store_util_delete_peer(&event->repeat_pairing.conn_desc.peer_id_addr);
+        {
+            struct ble_gap_conn_desc desc{};
+            if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) == 0) {
+                ble_store_util_delete_peer(&desc.peer_id_addr);
+            }
+        }
         return BLE_GAP_REPEAT_PAIRING_RETRY;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
@@ -335,9 +340,9 @@ static int dis_access_cb(uint16_t /*conn_h*/, uint16_t /*attr_h*/,
     const ble_uuid_t *uuid = ctxt->chr->uuid;
     const char *str = nullptr;
 
-    if (ble_uuid_cmp(uuid, BLE_UUID16_DECLARE(0x2A29)) == 0) str = "PAKT";
-    else if (ble_uuid_cmp(uuid, BLE_UUID16_DECLARE(0x2A24)) == 0) str = "APRS-TNC-1";
-    else if (ble_uuid_cmp(uuid, BLE_UUID16_DECLARE(0x2A26)) == 0) str = "0.1.0";
+    if (ble_uuid_cmp(uuid, &uuid_mfr_name.u) == 0) str = "PAKT";
+    else if (ble_uuid_cmp(uuid, &uuid_model_number.u) == 0) str = "APRS-TNC-1";
+    else if (ble_uuid_cmp(uuid, &uuid_fw_revision.u) == 0) str = "0.1.0";
     else return BLE_ATT_ERR_ATTR_NOT_FOUND;
 
     return os_mbuf_append(ctxt->om, str, strlen(str)) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
@@ -354,17 +359,17 @@ static int aprs_access_cb(uint16_t conn_h, uint16_t attr_h,
     // ── Read ──────────────────────────────────────────────────────────────────
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
         if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_dev_config.u) == 0) {
-            if (!srv.handlers_.on_config_read) return BLE_ATT_ERR_UNLIKELY;
+            if (!srv.handlers().on_config_read) return BLE_ATT_ERR_UNLIKELY;
             uint8_t buf[256];
-            size_t n = srv.handlers_.on_config_read(buf, sizeof(buf));
+            size_t n = srv.handlers().on_config_read(buf, sizeof(buf));
             if (n == 0) return BLE_ATT_ERR_UNLIKELY;
             return os_mbuf_append(ctxt->om, buf, n) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
         if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_dev_caps.u) == 0) {
             uint8_t buf[256];
             size_t n = 0;
-            if (srv.handlers_.on_caps_read) {
-                n = srv.handlers_.on_caps_read(buf, sizeof(buf));
+            if (srv.handlers().on_caps_read) {
+                n = srv.handlers().on_caps_read(buf, sizeof(buf));
             }
             if (n == 0) {
                 // Fallback: empty JSON object if handler not wired.
@@ -402,7 +407,7 @@ static int aprs_access_cb(uint16_t conn_h, uint16_t attr_h,
 
     if (ble_uuid_cmp(ctxt->chr->uuid, &uuid_dev_command.u) == 0) {
         // Device Command is small (≤64 B) – not chunked, delivered directly.
-        if (srv.handlers_.on_command && !srv.handlers_.on_command(buf, buf_len)) {
+        if (srv.handlers().on_command && !srv.handlers().on_command(buf, buf_len)) {
             return BLE_ATT_ERR_UNLIKELY;
         }
         return 0;
@@ -476,7 +481,7 @@ static int kiss_access_cb(uint16_t conn_h, uint16_t /*attr_h*/,
 static void on_ble_sync()
 {
     pakt::BleServer &srv = pakt::BleServer::instance();
-    start_advertising_internal(srv.device_name_);
+    start_advertising_internal(srv.device_name());
 }
 
 static void on_ble_reset(int reason)
@@ -496,24 +501,24 @@ static void ble_host_task(void * /*arg*/)
 static void on_config_chunk_complete(const uint8_t *data, size_t len)
 {
     pakt::BleServer &srv = pakt::BleServer::instance();
-    if (srv.handlers_.on_config_write) {
-        srv.handlers_.on_config_write(data, len);
+    if (srv.handlers().on_config_write) {
+        srv.handlers().on_config_write(data, len);
     }
 }
 
 static void on_tx_req_chunk_complete(const uint8_t *data, size_t len)
 {
     pakt::BleServer &srv = pakt::BleServer::instance();
-    if (srv.handlers_.on_tx_request) {
-        srv.handlers_.on_tx_request(data, len);
+    if (srv.handlers().on_tx_request) {
+        srv.handlers().on_tx_request(data, len);
     }
 }
 
 static void on_kiss_tx_chunk_complete(const uint8_t *data, size_t len)
 {
     pakt::BleServer &srv = pakt::BleServer::instance();
-    if (srv.handlers_.on_kiss_tx) {
-        srv.handlers_.on_kiss_tx(data, len);
+    if (srv.handlers().on_kiss_tx) {
+        srv.handlers().on_kiss_tx(data, len);
     }
     // If no handler registered, the KISS frame is silently dropped.
     // (KISS is a raw pipe — no KISS-level ACK is sent back to the client.)
@@ -586,6 +591,35 @@ void BleServer::start()
 {
     nimble_port_freertos_init(ble_host_task);
     // Advertising starts when NimBLE fires on_ble_sync after stack init.
+}
+
+const BleServer::Handlers &BleServer::handlers() const
+{
+    return handlers_;
+}
+
+const char *BleServer::device_name() const
+{
+    return device_name_;
+}
+
+void BleServer::set_connected(uint16_t conn_handle, bool bonded)
+{
+    conn_handle_ = conn_handle;
+    connected_ = true;
+    bonded_ = bonded;
+}
+
+void BleServer::clear_connection()
+{
+    conn_handle_ = 0xFFFF;
+    connected_ = false;
+    bonded_ = false;
+}
+
+void BleServer::set_bonded(bool bonded)
+{
+    bonded_ = bonded;
 }
 
 // ── Notify helpers ────────────────────────────────────────────────────────────

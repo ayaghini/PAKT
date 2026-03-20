@@ -50,6 +50,8 @@ Notes:
 | Measurement | Expected | Measured | Pass? |
 |-------------|----------|----------|-------|
 | SGTL5000 I2C address detected | 0x0A | | |
+| MAX17048 I2C address detected | 0x36 | | |
+| u-blox M9N I2C address detected | 0x42 | | |
 | I2C bus voltage | 3.3 V high | | |
 
 Notes:
@@ -73,9 +75,9 @@ Notes:
 
 | Measurement | Expected | Measured | Pass? |
 |-------------|----------|----------|-------|
-| I2S_MCLK frequency (GPIO4) | 8.192 MHz | | |
-| I2S_BCLK frequency (GPIO5) | 256 kHz | | |
-| I2S_WS frequency (GPIO6) | 8.000 kHz | | |
+| I2S_MCLK frequency (GPIO14) | 8.192 MHz | | |
+| I2S_BCLK frequency (GPIO8) | 256 kHz | | |
+| I2S_WS frequency (GPIO15) | 8.000 kHz | | |
 | I2S underrun count (idle) | 0 | | |
 
 Notes:

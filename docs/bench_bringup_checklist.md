@@ -69,11 +69,12 @@ Record: paired successfully, auth error confirmed on unpaired write.
 
 **Goal:** confirm SGTL5000 codec responds at its I2C address.
 
-1. [ ] Connect Teensy Audio Rev D to Feather per wiring plan (I2C_SDA=GPIO8, I2C_SCL=GPIO9)
+1. [ ] Connect Teensy Audio Rev D to Feather per wiring plan (`I2C_SDA=GPIO3`, `I2C_SCL=GPIO4`)
 2. [ ] Power on
-3. [ ] Run I2C scan firmware or monitor log for SGTL5000 detect message
-4. [ ] Expected I2C address: 0x0A (SGTL5000 with CS pin low) — confirm against your board revision
-5. [ ] Serial log shows `SGTL5000 detected at 0x0A` (or equivalent firmware log)
+3. [ ] Ensure firmware starts `SYS_MCLK` before codec probing
+4. [ ] Run I2C scan firmware or monitor log for SGTL5000 detect message
+5. [ ] Expected I2C devices on the current harness: `0x0A` (SGTL5000), `0x36` (MAX17048), `0x42` (u-blox M9N)
+6. [ ] Serial log shows `Using SGTL5000 candidate address 0x0A` and successful codec init
 
 ---
 
@@ -85,12 +86,13 @@ Driver: `firmware/components/radio_sa818/Sa818Radio.cpp` — wired into `radio_t
 `Sa818UartTransport` (UART1, 9600 8N1) and `PttGpioFn` lambda (GPIO11 active-low).
 
 1. [ ] Connect SA818 to Feather per wiring plan:
-   - Feather GPIO15 → SA818 RX (AT command input)
-   - Feather GPIO16 → SA818 TX (AT response output)
+   - Feather GPIO13 → SA818 RX (AT command input)
+   - Feather GPIO9 → SA818 TX (AT response output)
    - Feather GPIO11 → SA818 PTT (active low)
 2. [ ] Power on SA818 supply rail; measure V_RADIO → expect 3.6–4.2 V (SA818 datasheet §4)
 3. [ ] Power on Feather; serial log must show within 2 s:
    - `radio: PTT GPIO11 configured (HIGH=off); watchdog safe-off registered`
+   - `sa818_bench: --- STAGE 1: UART HANDSHAKE (AT+DMOCONNECT) ---`
    - `radio: SA818 init OK`
    - (If init fails: `radio: SA818 init failed – radio unavailable; PTT remains off`)
 4. [ ] Confirm AT handshake visible on UART1 with logic analyser or USB-serial tap:
@@ -117,9 +119,9 @@ Record: SA818 UART response string, PTT voltage on assert/de-assert, V_RADIO und
 **Goal:** confirm MCLK is present and I2S clocks are stable.
 
 1. [ ] With SGTL5000 and Feather connected, power on
-2. [ ] Probe I2S_MCLK (GPIO4) with oscilloscope → expect 8.192 MHz
-3. [ ] Probe I2S_BCLK (GPIO5) → expect 256 kHz
-4. [ ] Probe I2S_WS (GPIO6) → expect 8 kHz square wave
+2. [ ] Probe I2S_MCLK (GPIO14) with oscilloscope → expect 8.192 MHz
+3. [ ] Probe I2S_BCLK (GPIO8) → expect 256 kHz
+4. [ ] Probe I2S_WS (GPIO15) → expect 8 kHz square wave
 5. [ ] Monitor for I2S underrun/overrun counters in serial log (should be 0 at idle)
 
 Clock plan:
@@ -137,10 +139,14 @@ Record: MCLK frequency, BCLK frequency, WS frequency, and whether the measured v
 
 1. [ ] Connect SGTL5000 line out → SA818 AF_IN via AF_TX_COUPLED network (1 µF + attenuator footprint)
 2. [ ] Connect SA818 AF_OUT → SGTL5000 line in via AF_RX_COUPLED network (1 µF + optional RC LPF)
-3. [ ] Inject a 1200 Hz / 2200 Hz Bell 202 tone pair from PC audio into codec line in
-4. [ ] Monitor SA818 AF_IN level with AC voltmeter → adjust attenuator for ~100 mVpp (SA818 AF_IN nominal)
-5. [ ] Key SA818 TX; monitor TX deviation with calibrated reference receiver or RF power meter
-6. [ ] Target: ±3 kHz deviation for FM APRS (adjust R divider in AF_TX_COUPLED)
+3. [ ] Run the firmware bench stages and confirm:
+   - headphone tones are audible on the PJRC jack
+   - `audio_bench` shows non-zero `peak` / `rms` values when `LINE_IN` is driven
+   - `sa818_bench` runs the short PTT and TX-audio stages only with a load or antenna attached
+4. [ ] Inject a 1200 Hz / 2200 Hz Bell 202 tone pair from PC audio into codec line in
+5. [ ] Monitor SA818 AF_IN level with AC voltmeter → adjust attenuator for ~100 mVpp (SA818 AF_IN nominal)
+6. [ ] Key SA818 TX; monitor TX deviation with calibrated reference receiver or RF power meter
+7. [ ] Target: ±3 kHz deviation for FM APRS (adjust R divider in AF_TX_COUPLED)
 
 Record: AF_TX_COUPLED attenuation setting, measured deviation, SA818 AF_OUT level into codec.
 

@@ -94,6 +94,12 @@ public:
     bool is_connected() const;
     bool is_bonded()    const;
 
+    const Handlers &handlers() const;
+    const char *device_name() const;
+    void set_connected(uint16_t conn_handle, bool bonded);
+    void clear_connection();
+    void set_bonded(bool bonded);
+
 private:
     BleServer() = default;
 

@@ -18,6 +18,8 @@
 #include "esp_timer.h"
 #include "nvs_flash.h"
 
+#include "audio_bench_test.h"
+#include "sa818_bench_test.h"
 #include "pakt/BleServer.h"
 #include "pakt/DeviceCapabilities.h"
 #include "pakt/KissFramer.h"
@@ -61,7 +63,7 @@ static i2s_chan_handle_t  g_i2s_tx_chan  = nullptr;
 
 // PCM output buffer for AFSK modulation (global to avoid stack pressure).
 // Max AX.25 = 330 B → ~22 400 samples at 8 kHz/1200 baud; 25 600 adds margin.
-static constexpr size_t kAfskMaxPcmSamples = 25600;
+static constexpr size_t kAfskMaxPcmSamples = 20000;
 static int16_t           g_tx_pcm_buf[kAfskMaxPcmSamples];
 
 // Device config (callsign, ssid, radio settings).
@@ -196,8 +198,8 @@ static void radio_task(void *arg)
     // this correctly; no -Wcapture-this-in-constexpr-context warning expected.
     static constexpr gpio_num_t kPttGpio    = static_cast<gpio_num_t>(11);
     static constexpr uart_port_t kUartPort  = UART_NUM_1;
-    static constexpr int         kUartTxPin = 15;   // SA818_RX_CTRL
-    static constexpr int         kUartRxPin = 16;   // SA818_TX_STAT
+    static constexpr int         kUartTxPin = 13;   // SA818_RX_CTRL (ESP TX → SA818 RXD)
+    static constexpr int         kUartRxPin = 9;    // SA818_TX_STAT (SA818 TXD → ESP RX)
     static constexpr int         kBaud      = 9600;
 
     // Configure PTT GPIO: output, default HIGH (PTT off).
@@ -236,6 +238,12 @@ static void radio_task(void *arg)
         [](bool on){ gpio_set_level(kPttGpio, on ? 0 : 1); }
     );
 
+    // Run staged SA818 bench test before normal init.
+    // Pass &g_i2s_tx_chan so Stage 6 (TX audio) can wait for audio_task to publish the handle.
+    pakt::bench::run_sa818_bench(transport, kPttGpio, kUartPort,
+                                 static_cast<const volatile void *>(&g_i2s_tx_chan),
+                                 8000);
+
     if (!radio.init()) {
         ESP_LOGE("radio", "SA818 init failed – radio unavailable; PTT remains off");
         // Watchdog safe-off callback stays as direct GPIO lambda (safe).
@@ -245,7 +253,7 @@ static void radio_task(void *arg)
     ESP_LOGI("radio", "SA818 init OK");
 
     // Set APRS frequency (144.390 MHz simplex, 25 kHz wide, squelch 1).
-    radio.set_freq(pakt::Sa818Radio::kAprsFreqHz, pakt::Sa818Radio::kAprsFreqHz);
+    radio.set_freq(144390000U, 144390000U);
 
     // Update watchdog safe-off to go through driver (cleaner state tracking).
     // The direct GPIO lambda remains registered until this point to guard init().
@@ -262,11 +270,14 @@ static void radio_task(void *arg)
 
 // ── SGTL5000 helpers ─────────────────────────────────────────────────────────
 //
-// GPIO assignments (from prototype_breakout_wiring_plan.md):
-//   I2C: SDA=GPIO8, SCL=GPIO9
-//   I2S: MCLK=GPIO4, BCLK=GPIO5, WS=GPIO6, DOUT=GPIO7, DIN=GPIO10
+// GPIO assignments (bench remap for Adafruit Feather ESP32-S3):
+//   I2C: SDA=GPIO3, SCL=GPIO4
+//   I2S: MCLK=GPIO14, BCLK=GPIO8, WS=GPIO15, DOUT=GPIO12, DIN=GPIO10
 //
-// SGTL5000 I2C address (7-bit): 0x0A
+// SGTL5000 7-bit I2C addresses:
+//   0x0A for the fixed-address package, or 0x0A/0x2A depending on ADR0 strap.
+// The Teensy audio board variant should resolve to one of these once SYS_MCLK is
+// running and the codec has left reset.
 // Register protocol: [reg_hi][reg_lo][val_hi][val_lo] (all 16-bit)
 
 static esp_err_t sgtl5000_write(i2c_master_dev_handle_t dev, uint16_t reg, uint16_t val)
@@ -279,6 +290,55 @@ static esp_err_t sgtl5000_write(i2c_master_dev_handle_t dev, uint16_t reg, uint1
     };
     return i2c_master_transmit(dev, buf, sizeof(buf), /*timeout_ms=*/10);
 }
+
+static void i2c_scan_bus(i2c_master_bus_handle_t bus)
+{
+    ESP_LOGI("i2c", "Scanning I2C bus for devices");
+    bool found = false;
+    for (uint8_t addr = 0x08; addr < 0x78; ++addr) {
+        i2c_master_dev_handle_t probe = nullptr;
+        i2c_device_config_t cfg = {};
+        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        cfg.device_address  = addr;
+        cfg.scl_speed_hz    = 100000;
+        if (i2c_master_bus_add_device(bus, &cfg, &probe) != ESP_OK) {
+            continue;
+        }
+
+        const esp_err_t err = i2c_master_probe(bus, addr, 10);
+        i2c_master_bus_rm_device(probe);
+
+        if (err == ESP_OK) {
+            ESP_LOGI("i2c", "Found device at 0x%02X", addr);
+            found = true;
+        }
+    }
+
+    if (!found) {
+        ESP_LOGW("i2c", "No I2C devices detected");
+    }
+}
+
+static void i2c_scan_bus_repeated(i2c_master_bus_handle_t bus,
+                                  uint32_t duration_ms,
+                                  uint32_t interval_ms)
+{
+    const int64_t deadline_us =
+        esp_timer_get_time() + static_cast<int64_t>(duration_ms) * 1000;
+
+    while (esp_timer_get_time() < deadline_us) {
+        i2c_scan_bus(bus);
+        vTaskDelay(pdMS_TO_TICKS(interval_ms));
+    }
+}
+
+static bool i2c_probe_addr(i2c_master_bus_handle_t bus, uint8_t addr)
+{
+    return i2c_master_probe(bus, addr, 10) == ESP_OK;
+}
+
+// audio_write_square_wave and audio_bench_self_test removed.
+// Bench test logic lives in audio_bench_test/audio_bench_test.cpp.
 
 // Power-up sequence for both ADC (RX: SA818 AF_OUT → line-in → I2S)
 // and DAC (TX: I2S → DAC → line-out → SA818 AF_IN) paths at 8 kHz.
@@ -308,8 +368,8 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev)
     // 3. Line-out control: output level and bias for SA818 AF_IN.
     if (sgtl5000_write(dev, 0x002C, 0x0F22) != ESP_OK) return false;
 
-    // 4. Short-circuit protection.
-    if (sgtl5000_write(dev, 0x003C, 0x1106) != ESP_OK) return false;
+    // 4. Short-circuit protection (PJRC reference value).
+    if (sgtl5000_write(dev, 0x003C, 0x4446) != ESP_OK) return false;
 
     // 5. Linear regulator: default.
     if (sgtl5000_write(dev, 0x0026, 0x006C) != ESP_OK) return false;
@@ -324,40 +384,56 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev)
     //    CHIP_CLK_CTRL = (2<<4)|(0<<2)|(0<<0) = 0x0020
     if (sgtl5000_write(dev, 0x0004, 0x0020) != ESP_OK) return false;
 
-    // 8. I2S: slave mode (bit8=0), 16-bit (DLEN=3→bits[4:2]=0xC), I2S/Philips (MODE=0).
-    //    CHIP_I2S_CTRL = 0x000C
-    if (sgtl5000_write(dev, 0x0006, 0x000C) != ESP_OK) return false;
+    // 8. I2S: slave mode (MS=0), 16-bit stereo Philips.
+    //    CHIP_I2S_CTRL bit layout (SGTL5000 datasheet §6.3):
+    //      [8]   MS       = 0 (slave; ESP32-S3 is master)
+    //      [7]   SCLKFREQ = 0 (32×Fs; matches 16-bit stereo → 2×16 = 32 BCLK/frame)
+    //      [5:4] DLEN     = 11 → 16-bit  ← field is at bits[5:4], NOT bits[3:2]
+    //      [1:0] MODE     = 00 → I2S/Philips
+    //    CHIP_I2S_CTRL = 0x0030
+    if (sgtl5000_write(dev, 0x0006, 0x0030) != ESP_OK) return false;
 
-    // 9. Signal routing (CHIP_SSS_CTRL 0x000A):
-    //    bits[13:12] DAC_SELECT=1  → I2S_IN  data feeds DAC (TX path: ESP→SA818).
-    //    bits[1:0]   I2S_SELECT=0  → ADC     data goes to I2S output (RX path: SA818→ESP).
-    //    0x1000 = (1<<12) | (0<<0)
-    if (sgtl5000_write(dev, 0x000A, 0x1000) != ESP_OK) return false;
+    // 9. Signal routing (CHIP_SSS_CTRL 0x000A).
+    //    Reset value = 0x0010 (PJRC keeps it).  Bit layout:
+    //      [5:4] DAP_SELECT = 01 → I2S_IN feeds DAP (pass-through by default)
+    //      [13:12] DAC_SELECT = 00 → DAP_OUT feeds DAC  (I2S→DAP→DAC→HP ✓)
+    //      [1:0]  I2S_SELECT = 00 → ADC feeds I2S output (ADC→ESP RX path ✓)
+    //    0x0010 = DAP_SELECT=I2S_IN; DAC takes from DAP output.
+    //    (Our previous 0x1000 set bits[13:12]=01 = ADC→DAC, silencing HP output.)
+    if (sgtl5000_write(dev, 0x000A, 0x0010) != ESP_OK) return false;
 
     // 10. ADC/DAC control: HPF active on ADC, no mute on ADC or DAC.
     if (sgtl5000_write(dev, 0x000E, 0x0000) != ESP_OK) return false;
 
     // 11. Analog control (CHIP_ANA_CTRL 0x0024):
-    //    bit8 MUTE_HP=1  (headphone unused; muted for safety)
-    //    bit4 MUTE_LO=0  (line-out ACTIVE — needed for AFSK TX to SA818 AF_IN)
-    //    bit2 SELECT_ADC=1  (line-in selected as ADC source, not microphone)
-    //    0x0104 = (1<<8) | (0<<4) | (1<<2)
-    if (sgtl5000_write(dev, 0x0024, 0x0104) != ESP_OK) return false;
+    //    SELECT_HP=0 → HP driven by DAC (not line-in bypass).
+    //    MUTE_HP=0   → HP unmuted.
+    //    SELECT_ADC=1 (bit2) → ADC source = LINE_IN (3-pin header on PJRC board).
+    //    EN_ZCD_HP=1 (bit1) → zero-cross detect for HP (matches PJRC).
+    //    0x0006 = bit2 | bit1
+    if (sgtl5000_write(dev, 0x0024, 0x0006) != ESP_OK) return false;
 
-    // 12. ADC volume: 0 dB starting point (tune during bring-up via BLE config).
+    // 12. Mic bias (CHIP_MIC_CTRL 0x002A): 3 V bias, 2 kΩ impedance.
+    //    Needed for the separate MIC header on the PJRC board; harmless during HP test.
+    if (sgtl5000_write(dev, 0x002A, 0x0254) != ESP_OK) return false;
+
+    // 13. ADC volume: 0 dB starting point.
     if (sgtl5000_write(dev, 0x0020, 0x0000) != ESP_OK) return false;
 
-    // 13. DAC volume: 0 dB both channels (0x3C3C per datasheet 0 dB setting).
-    //    Tune during bring-up for correct SA818 input deviation.
+    // 14. DAC volume: 0 dB both channels (0x3C3C per datasheet).
     if (sgtl5000_write(dev, 0x0010, 0x3C3C) != ESP_OK) return false;
 
-    // 14. Full analog power-up: add ADC (bit7), DAC (bit9), LINEOUT (bit6).
-    //    0x42A0 = 0x40A0 | (1<<9,DAC) | (1<<6,LINEOUT)  [bit7 ADC already in 0x40A0]
-    //    Note: exact bit positions for DAC/LINEOUT must be verified against datasheet.
-    if (sgtl5000_write(dev, 0x0030, 0x42E0) != ESP_OK) return false;
+    // 15. Line-out volume (CHIP_LINE_OUT_VOL 0x002E): PJRC reference level.
+    if (sgtl5000_write(dev, 0x002E, 0x1D1D) != ESP_OK) return false;
+
+    // 16. Full analog power-up (CHIP_ANA_POWER 0x0030) = 0x40FF.
+    //    PJRC Teensy Audio Adapter Rev D has DC-blocking caps on HP output,
+    //    so CAPLESS_HP_POWERUP (bit 9 = 0x0200) must NOT be set.
+    //    (Previous value 0x42FF incorrectly set bit 9; HP amp may have misbehaved.)
+    if (sgtl5000_write(dev, 0x0030, 0x40FF) != ESP_OK) return false;
     vTaskDelay(pdMS_TO_TICKS(5));
 
-    ESP_LOGI("audio", "SGTL5000 init: 8 kHz, ADC=line-in, DAC=line-out, MCLK=8.192 MHz");
+    ESP_LOGI("audio", "SGTL5000 init OK: 8 kHz, I2S→DAP→DAC→HP, ADC=LINE_IN, MCLK=8.192 MHz");
     return true;
 }
 
@@ -369,15 +445,25 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev)
 static void audio_pipeline_run()
 {
     static constexpr uint32_t kSampleRateHz  = 8000;
-    static constexpr size_t   kDmaFrames     = 256;   // ~32 ms at 8 kHz
+    static constexpr size_t   kDmaFrames     = 256;   // frames per DMA block
 
     // ── I2C master bus ────────────────────────────────────────────────────────
     i2c_master_bus_handle_t i2c_bus = nullptr;
     {
+        // Feather ESP32-S3 uses GPIO7 to enable QT/STEMMA power and pull-ups.
+        gpio_config_t i2c_power_cfg = {};
+        i2c_power_cfg.pin_bit_mask = (1ULL << GPIO_NUM_7);
+        i2c_power_cfg.mode         = GPIO_MODE_OUTPUT;
+        i2c_power_cfg.pull_up_en   = GPIO_PULLUP_DISABLE;
+        i2c_power_cfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        i2c_power_cfg.intr_type    = GPIO_INTR_DISABLE;
+        gpio_config(&i2c_power_cfg);
+        gpio_set_level(GPIO_NUM_7, 1);
+
         i2c_master_bus_config_t cfg = {};
         cfg.i2c_port            = I2C_NUM_0;
-        cfg.sda_io_num          = GPIO_NUM_8;
-        cfg.scl_io_num          = GPIO_NUM_9;
+        cfg.sda_io_num          = GPIO_NUM_3;
+        cfg.scl_io_num          = GPIO_NUM_4;
         cfg.clk_source          = I2C_CLK_SRC_DEFAULT;
         cfg.glitch_ignore_cnt   = 7;
         cfg.flags.enable_internal_pullup = false;
@@ -385,24 +471,10 @@ static void audio_pipeline_run()
             ESP_LOGE("audio", "I2C master bus init failed");
             return;
         }
-    }
 
-    // ── SGTL5000 I2C device ───────────────────────────────────────────────────
-    i2c_master_dev_handle_t sgtl_dev = nullptr;
-    {
-        i2c_device_config_t cfg = {};
-        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
-        cfg.device_address  = 0x0A;
-        cfg.scl_speed_hz    = 400000;
-        if (i2c_master_bus_add_device(i2c_bus, &cfg, &sgtl_dev) != ESP_OK) {
-            ESP_LOGE("audio", "SGTL5000 I2C device add failed");
-            return;
-        }
-    }
-
-    if (!sgtl5000_init(sgtl_dev)) {
-        ESP_LOGE("audio", "SGTL5000 init failed – check I2C wiring");
-        return;
+        // Bench bring-up aid: rescan for 35 s so a host can attach late and still
+        // observe every responding address on the shared audio/Qwiic bus.
+        i2c_scan_bus_repeated(i2c_bus, 35000, 5000);
     }
 
     // ── I2S full-duplex channel (ESP32-S3 master, SGTL5000 slave) ────────────
@@ -430,11 +502,11 @@ static void audio_pipeline_run()
         // MCLK = 1024 × 8 kHz = 8.192 MHz — matches SGTL5000 CLK_CTRL (SYS_FS=32kHz, 256×).
         cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_1024;
         cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
-            I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO);
-        cfg.gpio_cfg.mclk = GPIO_NUM_4;
-        cfg.gpio_cfg.bclk = GPIO_NUM_5;
-        cfg.gpio_cfg.ws   = GPIO_NUM_6;
-        cfg.gpio_cfg.dout = GPIO_NUM_7;   // ESP → codec DAC (AFSK TX path)
+            I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        cfg.gpio_cfg.mclk = GPIO_NUM_14;
+        cfg.gpio_cfg.bclk = GPIO_NUM_8;
+        cfg.gpio_cfg.ws   = GPIO_NUM_15;
+        cfg.gpio_cfg.dout = GPIO_NUM_12;  // ESP → codec DAC (AFSK TX path)
         cfg.gpio_cfg.din  = GPIO_NUM_10;  // codec ADC → ESP (AFSK RX path)
 
         // Configure both channels with the same clock/GPIO settings.
@@ -458,6 +530,47 @@ static void audio_pipeline_run()
         return;
     }
 
+    // The SGTL5000 only leaves reset after SYS_MCLK is present.
+    vTaskDelay(pdMS_TO_TICKS(5));
+    ESP_LOGI("audio", "I2S clocks enabled; rescanning I2C bus with MCLK active");
+    i2c_scan_bus(i2c_bus);
+
+    // ── SGTL5000 I2C device ───────────────────────────────────────────────────
+    static constexpr uint8_t kSgtl5000CandidateAddrs[] = {0x0A, 0x2A};
+    uint8_t codec_addr = 0;
+    for (uint8_t addr : kSgtl5000CandidateAddrs) {
+        if (i2c_probe_addr(i2c_bus, addr)) {
+            codec_addr = addr;
+            break;
+        }
+    }
+    if (codec_addr == 0) {
+        ESP_LOGE("audio", "No SGTL5000 candidate address responded with MCLK active");
+        return;
+    }
+    ESP_LOGI("audio", "Using SGTL5000 candidate address 0x%02X", codec_addr);
+
+    i2c_master_dev_handle_t sgtl_dev = nullptr;
+    {
+        i2c_device_config_t cfg = {};
+        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        cfg.device_address  = codec_addr;
+        cfg.scl_speed_hz    = 400000;
+        if (i2c_master_bus_add_device(i2c_bus, &cfg, &sgtl_dev) != ESP_OK) {
+            ESP_LOGE("audio", "SGTL5000 I2C device add failed");
+            return;
+        }
+    }
+
+    if (!sgtl5000_init(sgtl_dev)) {
+        ESP_LOGE("audio", "SGTL5000 init failed – check I2C wiring");
+        return;
+    }
+
+    // Run human-operated bench test (HP output tones + LINE_IN input monitor).
+    // The PJRC HP jack is TRS output-only; MIC is a separate header (not tested here).
+    pakt::bench::run_audio_bench(tx_chan, rx_chan, kSampleRateHz);
+
     // Publish TX handle so aprs_task can call afsk_tx_frame().
     g_i2s_tx_chan = tx_chan;
 
@@ -470,7 +583,8 @@ static void audio_pipeline_run()
             }
         });
 
-    static int16_t rx_buf[kDmaFrames];
+    static int16_t rx_buf[kDmaFrames * 2];
+    static int16_t mono_buf[kDmaFrames];
 
     ESP_LOGI("audio", "RX pipeline running: SGTL5000 + AfskDemodulator @ %u Hz",
              static_cast<unsigned>(kSampleRateHz));
@@ -480,7 +594,12 @@ static void audio_pipeline_run()
         esp_err_t err = i2s_channel_read(rx_chan, rx_buf, sizeof(rx_buf),
                                          &bytes_read, pdMS_TO_TICKS(50));
         if (err == ESP_OK && bytes_read > 0) {
-            demod.process(rx_buf, bytes_read / sizeof(int16_t));
+            const size_t stereo_samples = bytes_read / sizeof(int16_t);
+            const size_t frames = stereo_samples / 2;
+            for (size_t i = 0; i < frames; ++i) {
+                mono_buf[i] = rx_buf[i * 2];
+            }
+            demod.process(mono_buf, frames);
         } else if (err != ESP_ERR_TIMEOUT) {
             ESP_LOGW("audio", "I2S read error: %s", esp_err_to_name(err));
         }
@@ -519,16 +638,41 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
     // SA818 TX path ramp-up: allow PA and squelch to settle.
     vTaskDelay(pdMS_TO_TICKS(10));
 
-    size_t   bytes_written = 0;
-    // Timeout = audio duration + 500 ms margin.
-    uint32_t timeout_ms = static_cast<uint32_t>(n_samples * 1000u / 8000u) + 500u;
-    esp_err_t err = i2s_channel_write(g_i2s_tx_chan,
-                                      g_tx_pcm_buf,
-                                      n_samples * sizeof(int16_t),
-                                      &bytes_written,
-                                      pdMS_TO_TICKS(timeout_ms));
-    if (err != ESP_OK) {
-        ESP_LOGE("aprs", "afsk_tx: I2S write error: %s", esp_err_to_name(err));
+    // I2S channel is stereo (16-bit L + 16-bit R per frame).
+    // The AFSK modulator produces mono samples; duplicate each sample to both
+    // channels so the SA818 audio input (connected to LINE_OUT L or R) receives
+    // the correct signal at the correct sample rate.
+    // Writing mono bytes directly would split odd/even samples across L/R channels,
+    // doubling the apparent sample rate and making AFSK completely undecodable.
+    static int16_t stereo_chunk[512]; // 256 stereo frames, task-static (safe: single task)
+    static constexpr size_t kChunkFrames = sizeof(stereo_chunk) / (2 * sizeof(int16_t));
+
+    const uint32_t timeout_ms = static_cast<uint32_t>(n_samples * 1000u / 8000u) + 500u;
+    esp_err_t err      = ESP_OK;
+    size_t    bytes_written = 0;
+    size_t    remaining = n_samples;
+    size_t    offset    = 0;
+
+    while (remaining > 0) {
+        const size_t frames = remaining > kChunkFrames ? kChunkFrames : remaining;
+        for (size_t i = 0; i < frames; ++i) {
+            stereo_chunk[i * 2]     = g_tx_pcm_buf[offset + i];
+            stereo_chunk[i * 2 + 1] = g_tx_pcm_buf[offset + i];
+        }
+        size_t chunk_written = 0;
+        err = i2s_channel_write(g_i2s_tx_chan,
+                                stereo_chunk,
+                                frames * 2u * sizeof(int16_t),
+                                &chunk_written,
+                                pdMS_TO_TICKS(timeout_ms));
+        if (err != ESP_OK) {
+            ESP_LOGE("aprs", "afsk_tx: I2S write error: %s", esp_err_to_name(err));
+            break;
+        }
+        // Track written bytes in mono-equivalent units for the check below.
+        bytes_written += chunk_written / 2u;
+        remaining -= frames;
+        offset    += frames;
     }
 
     // Wait for DMA to drain (4 descs × 256 frames / 8000 Hz ≈ 128 ms).
@@ -715,7 +859,8 @@ static void gps_task(void *arg)
 
         // ── Stale-fix check ───────────────────────────────────────────────────
         if (parser.valid() && (now_ms - last_valid_ms) >= kStaleMs) {
-            ESP_LOGW("gps", "GPS fix stale (>%u ms)", kStaleMs);
+            ESP_LOGW("gps", "GPS fix stale (>%lu ms)",
+                     static_cast<unsigned long>(kStaleMs));
             parser.mark_stale();
         }
 

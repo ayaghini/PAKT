@@ -67,7 +67,9 @@ private:
         uint8_t  payload_lens[kMaxChunks];
     };
 
-    static constexpr size_t kSlots = 4; // max simultaneous in-progress messages
+    // Bench firmware only needs one in-flight message per characteristic.
+    // Keeping this at 1 avoids burning large amounts of internal DRAM.
+    static constexpr size_t kSlots = 1;
 
     Slot     slots_[kSlots]{};
     CompleteCallback cb_;
