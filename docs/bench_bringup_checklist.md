@@ -14,6 +14,8 @@ Bench selection note:
 - Blocking bench stages are now configurable in `firmware/main/bench_profile_config.h`.
 - For focused debug runs, disable unrelated stages before rebuilding/flashing.
 - APRS Stage C can now be run as an isolated recorder/export workflow and has a configurable ADC gain step.
+- The audio pipeline sample rate is also selectable there (`8 kHz` or `16 kHz`);
+  the current high-fidelity debug path prefers `16 kHz`.
 
 ---
 
@@ -210,6 +212,22 @@ Record: decode success rate, receiving device/app used, decoded packet text, and
 7. [ ] Prefer the `16-bit` Stage C recorder path for new captures; use the selected ADC gain step in `bench_profile_config.h` to match the best observed RX margin
 
 Record: APRS source used, packet interval, approximate distance, decoded frame examples if any, `rx_peak_abs` behavior if decode fails, and whether a 30-second WAV capture was exported.
+
+Current troubleshooting note from 2026-03-20:
+- a targeted Stage C workflow now exists for capture-only RX debugging via `firmware/main/bench_profile_config.h`
+- the 30-second recorder/export path has been validated on hardware using PSRAM-backed `16-bit` mono WAV capture
+- saved captures currently suggest a mismatch between what the firmware records at the demod input and what the oscilloscope shows on the analog RX nodes
+- scope captures in `/Users/macmini4/Desktop/PAKT/tmp/osc/` indicate the two probed analog points track each other reasonably well after scaling, which reduces the likelihood of gross waveform destruction between `SA818 AF_OUT` and `SGTL5000 LINE_IN_L`
+- because of that, future RX debug should prioritize:
+  - short burst-triggered raw sample dumps from the firmware `mono_buf`
+  - side-by-side comparison against the same event on the scope
+  - verification of SGTL5000 input/gain/config and I2S RX sample interpretation
+  - use of the new RX debug controls in `bench_profile_config.h`:
+    - `kRxInputMode`
+    - `kRxSwapStereoSlots`
+    - `kRxByteSwapSamples`
+    - `kRxEnableDcBlock`
+    - `kRxDcBlockPole`
 
 ---
 

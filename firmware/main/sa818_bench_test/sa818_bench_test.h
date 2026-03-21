@@ -48,7 +48,7 @@ using RxPeakFn = int32_t (*)();
 //   uart_port      – used only for log display (communication is via transport)
 //   p_i2s_tx       – pointer to the global I2S TX handle; bench polls until
 //                    non-null for Stage 5 (TX audio). Pass nullptr to skip.
-//   sample_rate_hz – I2S sample rate (must match audio init; typically 8000)
+//   sample_rate_hz – I2S sample rate (must match audio init; typically 8000 or 16000)
 //   tx_wait_ms     – max milliseconds to wait for I2S TX to become available
 //   rx_peak_fn     – optional callback returning rolling 1-s RX peak_abs;
 //                    used by Stage 6 to display live capture stats.

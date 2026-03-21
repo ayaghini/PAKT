@@ -12,7 +12,7 @@
 // Output (Phase 1):
 //   ESP32-S3 I2S TX → SGTL5000 I2S_IN → DAP (pass-through) → DAC → HP amp
 //   → 2.2 µF DC-blocking caps → 3.5 mm TRS jack (tip=L, ring=R, sleeve=GND)
-//   Left  channel = even I2S slots (I2S Philips, 16-bit stereo @ 8 kHz)
+//   Left  channel = even I2S slots (I2S Philips, 16-bit stereo at the selected sample rate)
 //   Right channel = odd  I2S slots
 //   The 3.5 mm jack is a TRS OUTPUT jack only (no microphone on this connector).
 //

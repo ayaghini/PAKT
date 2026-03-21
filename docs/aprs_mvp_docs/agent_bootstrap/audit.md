@@ -34,6 +34,124 @@ Current local limitation:
   - missing `/Users/macmini4/.espressif/espidf.constraints.v5.5.txt`
 - so this audit item records code/documentation state, not a fresh hardware-verified flash
 
+## APRS RX analog-vs-digital troubleshooting record (2026-03-20)
+
+Status: hardware tested and captured during the current working session; intended as the handoff record for continued RX debugging.
+
+Firmware/debug setup used:
+- `firmware/main/bench_profile_config.h`
+  - used to disable unrelated benches and run APRS Stage C capture in isolation
+  - Stage C gain made selectable for targeted RX capture runs
+- `firmware/main/main.cpp`
+  - Stage C recorder updated to export signed `16-bit` mono WAV from PSRAM
+  - full 30 s capture/export path validated on hardware
+
+Captured artifacts:
+- pre-cap, 16-bit, +12 dB capture:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/rx_capture_2026-03-20_101244.wav`
+- post-cap, 16-bit, +12 dB capture after adding an inline ~887 nF series capacitor between `SA818 AF_OUT` and `SGTL5000 LINE_IN_L`:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/rx_capture_2026-03-20_105850.wav`
+- scope captures:
+  - `/Users/macmini4/Desktop/PAKT/tmp/osc/pic_0_1.png`
+  - `/Users/macmini4/Desktop/PAKT/tmp/osc/pic_0_3.png`
+  - `/Users/macmini4/Desktop/PAKT/tmp/osc/pic_0_4.png`
+  - `/Users/macmini4/Desktop/PAKT/tmp/osc/pic_0_5.png`
+  - `/Users/macmini4/Desktop/PAKT/tmp/osc/pic_0_6.png`
+
+What the WAV captures showed:
+- both pre-cap and post-cap demod-input recordings still failed to show strong Bell 202 content at `1200 Hz` / `2200 Hz`
+- pre-cap capture was dominated by low-frequency / baseline-heavy junk
+- post-cap capture was materially cleaner at idle, which means the inline capacitor helped
+- however, even the post-cap file still did not look like a clean Bell 202 waveform at the firmware recorder input
+
+Quantitative directional findings:
+- pre-cap overall mean amplitude was much higher than post-cap, indicating substantial low-frequency / DC-heavy junk before the cap
+- post-cap idle became much quieter while real burst timing remained visible
+- despite the cleaner idle, no on-device APRS decode was achieved and the saved waveform still lacked convincing Bell 202 energy
+
+What the scope captures changed in the diagnosis:
+- earlier WAV-only analysis pointed toward the analog RX path as the main suspect
+- the later scope captures, especially the tighter-timebase views (`pic_0_4.png`, `pic_0_5.png`, `pic_0_6.png`), show that the two probed points track each other closely after vertical scaling
+- that makes gross analog corruption between `SA818 AF_OUT` and `SGTL5000 LINE_IN_L` less likely than first suspected
+- current best interpretation:
+  - the inline cap improved the RX path and should likely remain in place
+  - the analog path no longer looks like the sole or primary failure point
+  - the stronger suspicion has moved downstream into the codec/sample path:
+    - SGTL5000 input selection or gain/config
+    - I2S RX sampling / interpretation
+    - sample-rate/path mismatch
+    - recorder path not faithfully representing the waveform visible on the scope
+
+Conservative conclusion to preserve for follow-up:
+- APRS packet TX is still the strongest verified RF success on the prototype
+- prototype APRS RX remains open
+- a bad APRS source and gross analog-path destruction are now both less likely than before
+- next debug step should compare a short burst-triggered raw sample dump from `mono_buf` against the scope waveform at the same event to localize whether the discrepancy begins at codec sampling or later in software
+
+## SGTL5000 / I2S RX-path debug controls added (2026-03-20)
+
+Status: implemented and build-verified in the current working session.
+
+Firmware changes:
+- `firmware/main/bench_profile_config.h`
+  - added build-time RX sample-path controls:
+    - `kRxInputMode` (`Left`, `Right`, `Average`, `Stronger`)
+    - `kRxSwapStereoSlots`
+    - `kRxByteSwapSamples`
+    - `kRxEnableDcBlock`
+    - `kRxDcBlockPole`
+    - `kRxLogChannelStats`
+    - `kLogSgtl5000Readback`
+- `firmware/main/main.cpp`
+  - added SGTL5000 register readback logging after codec init
+  - RX loop now logs left/right/mono channel stats once per second
+  - mono recorder/demod input is no longer hard-wired to raw left-slot samples; it is now selected and conditioned according to `bench_profile_config.h`
+  - optional firmware DC blocker now exists ahead of both the recorder and demodulator
+
+Why this matters:
+- the analog scope captures now suggest the probed RX nodes track each other reasonably well
+- because of that, continued APRS RX debugging should focus on how the firmware interprets the codec samples rather than assuming the breadboard path is the only problem
+- the new controls let future runs answer these questions quickly without touching wiring:
+  - are we using the correct stereo slot?
+  - are the samples byte-ordered as expected?
+  - does a light DC blocker materially improve Bell 202 energy at the demod input?
+  - is one channel consistently cleaner than the other?
+
+Current working hypothesis:
+- the remaining issue is now more likely in one of:
+  - SGTL5000 input/gain/config assumptions
+  - I2S RX slot/sample interpretation
+  - sample conditioning needed before demod
+  - less likely, but still possible, a deeper sample-rate/path mismatch
+
+## 16 kHz codec / I2S debug mode added (2026-03-20)
+
+Status: implemented and build-verified in the current working session.
+
+Firmware changes:
+- `firmware/main/bench_profile_config.h`
+  - added `kAudioSampleRateHz` build-time control
+  - current debug configuration set to `16000` for higher-fidelity capture work
+- `firmware/main/main.cpp`
+  - audio pipeline, recorder, PCM snapshot, AFSK TX path, and APRS loopback now use the configured audio sample rate instead of hard-coded `8000`
+  - SGTL5000 clocking is now derived from an explicit clock plan:
+    - `8000 Hz`  -> `SYS_FS = 32 kHz`, `RATE_MODE = /4`, `MCLK = 8.192 MHz`
+    - `16000 Hz` -> `SYS_FS = 32 kHz`, `RATE_MODE = /2`, `MCLK = 8.192 MHz`
+  - I2S MCLK multiple is selected to match that plan (`1024` at `8 kHz`, `512` at `16 kHz`)
+  - TX PCM buffer sizing increased to avoid truncation in `16 kHz` mode
+- `firmware/main/sa818_bench_test/sa818_bench_test.cpp`
+  - DMA drain timing now scales with the active sample rate
+
+Why this matters:
+- the prior firmware debug path was limited to `8 kHz`, which is enough for Bell 202 but leaves less timing and waveform margin than `16 kHz`
+- the new `16 kHz` mode improves both:
+  - saved debug WAV fidelity
+  - demodulator input detail during RX troubleshooting
+
+Current intent:
+- use `16 kHz` as the preferred SGTL5000/I2S debug mode while APRS RX remains unresolved
+- if a future regression appears in packet TX or bench audio stages, the firmware can still be switched back to `8 kHz` from the same config file for A/B comparison
+
 ## RX WAV analysis follow-up (2026-03-20)
 
 Status: extracted and inspected from a saved serial capture during the current working session.

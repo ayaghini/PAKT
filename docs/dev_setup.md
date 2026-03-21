@@ -126,7 +126,16 @@ This file controls:
 - top-level benches: `audio_bench`, `sa818_bench`, `aprs_bench`
 - APRS sub-stages: Stage 0 loopback, Stage A TX burst, Stage B RX gain sweep,
   PCM snapshot logging, and Stage C full RX recorder/export
+- audio sample-rate selection for the codec/I2S/modem pipeline:
+  - `8000` for the original APRS bench rate
+  - `16000` for higher-fidelity debug and capture runs
 - Stage C ADC gain step for targeted capture runs
+- RX sample-path controls for codec/I2S debugging:
+  - selected RX input view: left, right, average, or stronger channel
+  - optional stereo-slot swap
+  - optional sample byte swap
+  - optional firmware DC blocker before recorder/demod
+  - SGTL5000 register readback logging after init
 
 Recommended workflow for focused debugging:
 

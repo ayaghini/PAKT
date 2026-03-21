@@ -12,10 +12,23 @@
 
 namespace pakt::benchcfg {
 
+enum class RxInputMode : uint8_t {
+    Left = 0,
+    Right,
+    Average,
+    Stronger,
+};
+
 // Top-level benches.
 inline constexpr bool kEnableAudioBench = false;
 inline constexpr bool kEnableSa818Bench = false;
 inline constexpr bool kEnableAprsBench  = true;
+
+// Audio/codec debug rate.
+// Supported here:
+//   8000  Hz - original APRS bench rate
+//   16000 Hz - higher-fidelity debug/capture mode
+inline constexpr uint32_t kAudioSampleRateHz = 16000;
 
 // APRS bench sub-stages.
 inline constexpr bool kEnableAprsStage0Loopback    = false;
@@ -23,6 +36,18 @@ inline constexpr bool kEnableAprsStageATxBurst     = false;
 inline constexpr bool kEnableAprsStageBRxGainSweep = false;
 inline constexpr bool kEnableAprsStageBPcmSnapshot = false;  // depends on Stage B
 inline constexpr bool kEnableAprsStageCRxRecord    = true;
+inline constexpr bool kAutoStartRxRecorderOnBoot   = true;
+inline constexpr uint32_t kAutoStartRxRecorderDelayMs = 5000;
+
+// RX sample-path debug controls.
+// These affect the exact mono samples fed into the recorder and demodulator.
+inline constexpr RxInputMode kRxInputMode = RxInputMode::Left;
+inline constexpr bool kRxSwapStereoSlots = false;
+inline constexpr bool kRxByteSwapSamples = false;
+inline constexpr bool kRxEnableDcBlock   = true;
+inline constexpr float kRxDcBlockPole    = 0.995f;
+inline constexpr bool kRxLogChannelStats = true;
+inline constexpr bool kLogSgtl5000Readback = true;
 
 // Stage C recorder settings.
 // Select the recorder ADC gain directly in dB.

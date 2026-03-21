@@ -67,6 +67,8 @@ static pakt::PttWatchdog *g_ptt_watchdog = nullptr;
 static pakt::Sa818Radio  *g_radio        = nullptr;
 static i2s_chan_handle_t  g_i2s_tx_chan  = nullptr;
 
+static constexpr uint32_t kAudioSampleRateHz = pakt::benchcfg::kAudioSampleRateHz;
+
 // Rolling 1-second RX peak absolute value, updated by audio_task's demod loop.
 // Read by sa818_bench Stage 6 (RX audio capture) via a non-capturing lambda.
 // Atomic: audio_task writes, radio_task reads during bench window.
@@ -96,15 +98,17 @@ static std::atomic<uint8_t>  g_adc_gain_req{0};
 // arm : aprs_task sets true; audio_task clears when collection starts.
 // valid: audio_task sets true (release) when 1024 samples collected.
 // aprs_task reads/logs the buffer then clears valid and arm for the next test.
-static constexpr size_t kPcmCapLen = 1024;  // 128 ms at 8 kHz
+static constexpr size_t kPcmCapLen =
+    static_cast<size_t>(kAudioSampleRateHz * 128u / 1000u);  // 128 ms window
 static int16_t           g_pcm_cap[kPcmCapLen];
 static std::atomic<bool> g_pcm_cap_arm{false};
 static std::atomic<bool> g_pcm_cap_valid{false};
 
-// Full RX debug recorder: 30 s mono PCM at 8 kHz, signed 16-bit.
+// Full RX debug recorder: 30 s mono PCM at the configured audio sample rate,
+// signed 16-bit.
 // Backed by PSRAM when available so we can export the exact demod-input samples
 // for offline analysis without 8-bit quantization loss.
-static constexpr uint32_t kRxRecordSampleRateHz = 8000;
+static constexpr uint32_t kRxRecordSampleRateHz = kAudioSampleRateHz;
 static constexpr uint32_t kRxRecordSeconds      = 30;
 static constexpr size_t   kRxRecordSamples =
     static_cast<size_t>(kRxRecordSampleRateHz) * kRxRecordSeconds;
@@ -115,8 +119,9 @@ static std::atomic<bool>   g_rx_record_valid{false};
 static std::atomic<size_t> g_rx_record_samples{0};
 
 // PCM output buffer for AFSK modulation (global to avoid stack pressure).
-// Max AX.25 = 330 B → ~22 400 samples at 8 kHz/1200 baud; 25 600 adds margin.
-static constexpr size_t kAfskMaxPcmSamples = 20000;
+// Max AX.25 = 330 B → ~44 800 samples at 16 kHz/1200 baud; keep margin above
+// that so debug/sample-rate experiments do not truncate packet TX.
+static constexpr size_t kAfskMaxPcmSamples = 60000;
 static int16_t           g_tx_pcm_buf[kAfskMaxPcmSamples];
 
 // Device config (callsign, ssid, radio settings).
@@ -459,7 +464,7 @@ static void radio_task(void *arg)
         pakt::bench::run_sa818_bench(
             transport, kPttGpio, kUartPort,
             static_cast<const volatile void *>(&g_i2s_tx_chan),
-            8000,
+            kAudioSampleRateHz,
             /*tx_wait_ms=*/120000,
             /*rx_peak_fn=*/[]() -> int32_t {
                 return g_rx_peak_abs.load(std::memory_order_relaxed);
@@ -515,6 +520,120 @@ static esp_err_t sgtl5000_write(i2c_master_dev_handle_t dev, uint16_t reg, uint1
     return i2c_master_transmit(dev, buf, sizeof(buf), /*timeout_ms=*/10);
 }
 
+static esp_err_t sgtl5000_read(i2c_master_dev_handle_t dev, uint16_t reg, uint16_t *out)
+{
+    if (!out) return ESP_ERR_INVALID_ARG;
+    uint8_t reg_buf[2] = {
+        static_cast<uint8_t>(reg >> 8),
+        static_cast<uint8_t>(reg & 0xFF),
+    };
+    uint8_t val_buf[2] = {0, 0};
+    const esp_err_t err = i2c_master_transmit_receive(
+        dev, reg_buf, sizeof(reg_buf), val_buf, sizeof(val_buf), /*timeout_ms=*/10);
+    if (err != ESP_OK) return err;
+    *out = static_cast<uint16_t>((static_cast<uint16_t>(val_buf[0]) << 8) | val_buf[1]);
+    return ESP_OK;
+}
+
+static const char *rx_input_mode_name()
+{
+    using pakt::benchcfg::RxInputMode;
+    switch (pakt::benchcfg::kRxInputMode) {
+    case RxInputMode::Left:    return "left";
+    case RxInputMode::Right:   return "right";
+    case RxInputMode::Average: return "average";
+    case RxInputMode::Stronger:return "stronger";
+    }
+    return "unknown";
+}
+
+static int16_t maybe_byteswap_sample(int16_t s)
+{
+    if constexpr (!pakt::benchcfg::kRxByteSwapSamples) {
+        return s;
+    } else {
+        const uint16_t u = static_cast<uint16_t>(s);
+        return static_cast<int16_t>((u << 8) | (u >> 8));
+    }
+}
+
+static int16_t select_rx_sample(int16_t left, int16_t right,
+                                uint32_t *left_abs_sum = nullptr,
+                                uint32_t *right_abs_sum = nullptr,
+                                int32_t *left_peak = nullptr,
+                                int32_t *right_peak = nullptr)
+{
+    left = maybe_byteswap_sample(left);
+    right = maybe_byteswap_sample(right);
+
+    const int32_t left_abs = left >= 0 ? left : -static_cast<int32_t>(left);
+    const int32_t right_abs = right >= 0 ? right : -static_cast<int32_t>(right);
+    if (left_abs_sum)  *left_abs_sum += static_cast<uint32_t>(left_abs);
+    if (right_abs_sum) *right_abs_sum += static_cast<uint32_t>(right_abs);
+    if (left_peak && left_abs > *left_peak)   *left_peak = left_abs;
+    if (right_peak && right_abs > *right_peak) *right_peak = right_abs;
+
+    using pakt::benchcfg::RxInputMode;
+    switch (pakt::benchcfg::kRxInputMode) {
+    case RxInputMode::Left:
+        return left;
+    case RxInputMode::Right:
+        return right;
+    case RxInputMode::Average:
+        return static_cast<int16_t>((static_cast<int32_t>(left) + right) / 2);
+    case RxInputMode::Stronger:
+        return (left_abs >= right_abs) ? left : right;
+    }
+    return left;
+}
+
+static int16_t dc_block_sample(int16_t s)
+{
+    if constexpr (!pakt::benchcfg::kRxEnableDcBlock) {
+        return s;
+    } else {
+        static float prev_x = 0.0f;
+        static float prev_y = 0.0f;
+        const float x = static_cast<float>(s);
+        const float y = x - prev_x + pakt::benchcfg::kRxDcBlockPole * prev_y;
+        prev_x = x;
+        prev_y = y;
+        const float clipped = y > 32767.0f ? 32767.0f : (y < -32768.0f ? -32768.0f : y);
+        return static_cast<int16_t>(clipped);
+    }
+}
+
+static void log_sgtl5000_readback(i2c_master_dev_handle_t dev)
+{
+    if constexpr (!pakt::benchcfg::kLogSgtl5000Readback) {
+        return;
+    }
+    static constexpr struct {
+        uint16_t reg;
+        const char *name;
+    } kRegs[] = {
+        {0x0002, "CHIP_DIG_POWER"},
+        {0x0004, "CHIP_CLK_CTRL"},
+        {0x0006, "CHIP_I2S_CTRL"},
+        {0x000A, "CHIP_SSS_CTRL"},
+        {0x000E, "CHIP_ADCDAC_CTRL"},
+        {0x0020, "CHIP_ANA_ADC_CTRL"},
+        {0x0024, "CHIP_ANA_CTRL"},
+        {0x0030, "CHIP_ANA_POWER"},
+    };
+    for (const auto &r : kRegs) {
+        uint16_t val = 0;
+        const esp_err_t err = sgtl5000_read(dev, r.reg, &val);
+        if (err == ESP_OK) {
+            ESP_LOGI("audio", "SGTL5000 readback %s (0x%04X) = 0x%04X",
+                     r.name, r.reg, val);
+        } else {
+            ESP_LOGW("audio", "SGTL5000 readback %s (0x%04X) failed: %s",
+                     r.name, r.reg, esp_err_to_name(err));
+        }
+    }
+}
+
 static void i2c_scan_bus(i2c_master_bus_handle_t bus)
 {
     ESP_LOGI("i2c", "Scanning I2C bus for devices");
@@ -561,17 +680,53 @@ static bool i2c_probe_addr(i2c_master_bus_handle_t bus, uint8_t addr)
     return i2c_master_probe(bus, addr, 10) == ESP_OK;
 }
 
+struct AudioClockPlan {
+    uint16_t clk_ctrl_reg;
+    i2s_mclk_multiple_t mclk_multiple;
+    uint32_t mclk_hz;
+    uint32_t bclk_hz;
+    const char *summary;
+};
+
+static bool make_audio_clock_plan(uint32_t sample_rate_hz, AudioClockPlan *out)
+{
+    if (!out) return false;
+    switch (sample_rate_hz) {
+    case 8000:
+        *out = AudioClockPlan{
+            .clk_ctrl_reg = 0x0020,                // SYS_FS=32 kHz, RATE_MODE=/4
+            .mclk_multiple = I2S_MCLK_MULTIPLE_1024,
+            .mclk_hz = 8192000,
+            .bclk_hz = sample_rate_hz * 2u * 16u,
+            .summary = "SYS_FS=32kHz RATE_MODE=/4 MCLK=8.192MHz",
+        };
+        return true;
+    case 16000:
+        *out = AudioClockPlan{
+            .clk_ctrl_reg = 0x0010,                // SYS_FS=32 kHz, RATE_MODE=/2
+            .mclk_multiple = I2S_MCLK_MULTIPLE_512,
+            .mclk_hz = 8192000,
+            .bclk_hz = sample_rate_hz * 2u * 16u,
+            .summary = "SYS_FS=32kHz RATE_MODE=/2 MCLK=8.192MHz",
+        };
+        return true;
+    default:
+        return false;
+    }
+}
+
 // audio_write_square_wave and audio_bench_self_test removed.
 // Bench test logic lives in audio_bench_test/audio_bench_test.cpp.
 
 // Power-up sequence for both ADC (RX: SA818 AF_OUT → line-in → I2S)
-// and DAC (TX: I2S → DAC → line-out → SA818 AF_IN) paths at 8 kHz.
+// and DAC (TX: I2S → DAC → line-out → SA818 AF_IN) paths at the configured
+// sample rate.
 //
-// Clock plan (consistent with I2S master MCLK_MULTIPLE_1024 @ 8 kHz):
-//   MCLK = 1024 × 8000 = 8.192 MHz delivered by ESP32-S3 I2S master.
-//   CHIP_CLK_CTRL: SYS_FS=32 kHz (MCLK÷256=32 kHz), RATE_MODE=÷4 → 8 kHz ADC/DAC.
-//   CHIP_CLK_CTRL = (RATE_MODE=2 @ bits[5:4]) | (SYS_FS=0 @ bits[3:2]) | (MCLK_FREQ=0 @ bits[1:0])
-//                 = (2<<4)|(0<<2)|(0<<0) = 0x0020
+// Clock plan:
+//   8 kHz  -> SYS_FS=32 kHz, RATE_MODE=/4, MCLK=8.192 MHz
+//   16 kHz -> SYS_FS=32 kHz, RATE_MODE=/2, MCLK=8.192 MHz
+// Both modes keep the codec master clock at 8.192 MHz while changing the
+// effective ADC/DAC sample rate through RATE_MODE.
 //
 // Gain calibration (ADC input level and DAC output level) is a hardware bring-up task.
 // CHIP_ANA_POWER bit layout assumed from SGTL5000 datasheet §6.5:
@@ -579,8 +734,15 @@ static bool i2c_probe_addr(i2c_master_bus_handle_t bus, uint8_t addr)
 //   bit 11: REFTOP_POWERUP  bit 9: DAC_POWERUP   bit 7: ADC_POWERUP
 //   bit 6: LINEOUT_POWERUP  bit 5: LINEOUT_MONO
 // Verify every bit against datasheet before first power-on.
-static bool sgtl5000_init(i2c_master_dev_handle_t dev)
+static bool sgtl5000_init(i2c_master_dev_handle_t dev, uint32_t sample_rate_hz)
 {
+    AudioClockPlan clock_plan{};
+    if (!make_audio_clock_plan(sample_rate_hz, &clock_plan)) {
+        ESP_LOGE("audio", "Unsupported audio sample rate: %u Hz",
+                 static_cast<unsigned>(sample_rate_hz));
+        return false;
+    }
+
     // 1. Partial analog power-up: VCOAMP (bias) only.
     //    Full power-up in step 8 after digital blocks are configured.
     if (sgtl5000_write(dev, 0x0030, 0x40A0) != ESP_OK) return false;
@@ -602,11 +764,8 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev)
     //    0x0073 = bit6(ADC)+bit5(DAC)+bit4(DAP)+bit1(I2S_IN)+bit0(I2S_OUT)
     if (sgtl5000_write(dev, 0x0002, 0x0073) != ESP_OK) return false;
 
-    // 7. Clock: SYS_FS=32 kHz (bits[3:2]=0), RATE_MODE=÷4 (bits[5:4]=2),
-    //    MCLK_FREQ=256×SYS_FS (bits[1:0]=0) → effective rate = 32000/4 = 8000 Hz.
-    //    MCLK input = 256 × 32000 = 8.192 MHz, matching I2S MCLK_MULTIPLE_1024 × 8 kHz.
-    //    CHIP_CLK_CTRL = (2<<4)|(0<<2)|(0<<0) = 0x0020
-    if (sgtl5000_write(dev, 0x0004, 0x0020) != ESP_OK) return false;
+    // 7. Clock: selected from the build-time audio clock plan.
+    if (sgtl5000_write(dev, 0x0004, clock_plan.clk_ctrl_reg) != ESP_OK) return false;
 
     // 8. I2S: slave mode (MS=0), 16-bit stereo Philips.
     //    CHIP_I2S_CTRL bit layout (SGTL5000 datasheet §6.3):
@@ -657,7 +816,10 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev)
     if (sgtl5000_write(dev, 0x0030, 0x40FF) != ESP_OK) return false;
     vTaskDelay(pdMS_TO_TICKS(5));
 
-    ESP_LOGI("audio", "SGTL5000 init OK: 8 kHz, I2S→DAP→DAC→HP, ADC=LINE_IN, MCLK=8.192 MHz");
+    ESP_LOGI("audio",
+             "SGTL5000 init OK: %u Hz, I2S→DAP→DAC→HP, ADC=LINE_IN, %s",
+             static_cast<unsigned>(sample_rate_hz),
+             clock_plan.summary);
     return true;
 }
 
@@ -686,8 +848,14 @@ static float goertzel_power(const int16_t *samples, size_t n, float freq_hz, flo
 
 static void audio_pipeline_run()
 {
-    static constexpr uint32_t kSampleRateHz  = 8000;
     static constexpr size_t   kDmaFrames     = 256;   // frames per DMA block
+    const uint32_t kSampleRateHz = kAudioSampleRateHz;
+    AudioClockPlan clock_plan{};
+    if (!make_audio_clock_plan(kSampleRateHz, &clock_plan)) {
+        ESP_LOGE("audio", "Unsupported configured sample rate: %u Hz",
+                 static_cast<unsigned>(kSampleRateHz));
+        return;
+    }
 
     // ── I2C master bus ────────────────────────────────────────────────────────
     i2c_master_bus_handle_t i2c_bus = nullptr;
@@ -723,9 +891,9 @@ static void audio_pipeline_run()
     // Both TX (AFSK modulator → DAC → SA818 AF_IN) and RX (SA818 AF_OUT → ADC → demod)
     // share the same I2S port so they use one coherent MCLK/BCLK/WS.
     //
-    // MCLK plan: MCLK_MULTIPLE_1024 × 8000 Hz = 8.192 MHz.
-    //   SGTL5000 CHIP_CLK_CTRL uses 256 × SYS_FS (32 kHz) = 8.192 MHz → ADC/DAC = 8 kHz.
-    //   BCLK = 8000 × 2 ch × 16 bit = 256 kHz; MCLK/BCLK = 32 (integer, no jitter).
+    // MCLK plan is selected by make_audio_clock_plan():
+    //   8 kHz  -> 8.192 MHz MCLK, 256 kHz BCLK
+    //   16 kHz -> 8.192 MHz MCLK, 512 kHz BCLK
     i2s_chan_handle_t tx_chan = nullptr;
     i2s_chan_handle_t rx_chan = nullptr;
     {
@@ -741,8 +909,7 @@ static void audio_pipeline_run()
     {
         i2s_std_config_t cfg      = {};
         cfg.clk_cfg               = I2S_STD_CLK_DEFAULT_CONFIG(kSampleRateHz);
-        // MCLK = 1024 × 8 kHz = 8.192 MHz — matches SGTL5000 CLK_CTRL (SYS_FS=32kHz, 256×).
-        cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_1024;
+        cfg.clk_cfg.mclk_multiple = clock_plan.mclk_multiple;
         cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
             I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
         cfg.gpio_cfg.mclk = GPIO_NUM_14;
@@ -804,10 +971,11 @@ static void audio_pipeline_run()
         }
     }
 
-    if (!sgtl5000_init(sgtl_dev)) {
+    if (!sgtl5000_init(sgtl_dev, kSampleRateHz)) {
         ESP_LOGE("audio", "SGTL5000 init failed – check I2C wiring");
         return;
     }
+    log_sgtl5000_readback(sgtl_dev);
 
     // Run human-operated bench test (HP output tones + LINE_IN input monitor).
     // The PJRC HP jack is TRS output-only; MIC is a separate header (not tested here).
@@ -837,6 +1005,13 @@ static void audio_pipeline_run()
 
     ESP_LOGI("audio", "RX pipeline running: SGTL5000 + AfskDemodulator @ %u Hz",
              static_cast<unsigned>(kSampleRateHz));
+    ESP_LOGI("audio",
+             "RX sample path: mode=%s swap_slots=%s byte_swap=%s dc_block=%s pole=%.3f",
+             rx_input_mode_name(),
+             pakt::benchcfg::kRxSwapStereoSlots ? "yes" : "no",
+             pakt::benchcfg::kRxByteSwapSamples ? "yes" : "no",
+             pakt::benchcfg::kRxEnableDcBlock ? "yes" : "no",
+             static_cast<double>(pakt::benchcfg::kRxDcBlockPole));
 
     // Rolling 1-second RX diagnostics.
     static constexpr int32_t kClipThresh = 28000; // ~85% of ±32767
@@ -844,6 +1019,10 @@ static void audio_pipeline_run()
     uint32_t rx_window_samples = 0;
     uint32_t rx_window_abs_sum = 0;
     uint32_t rx_window_clips   = 0;
+    uint32_t rx_left_abs_sum   = 0;
+    uint32_t rx_right_abs_sum  = 0;
+    int32_t  rx_left_peak      = 0;
+    int32_t  rx_right_peak     = 0;
 
     // PCM snapshot state — filled across multiple I2S reads until kPcmCapLen is reached.
     size_t pcm_cap_pos        = 0;
@@ -852,11 +1031,42 @@ static void audio_pipeline_run()
     // Full RX recorder state — captures the actual mono demod input for offline analysis.
     size_t rx_record_pos        = 0;
     bool   rx_record_collecting = false;
+    bool   rx_record_dumped     = false;
+    bool   auto_record_armed    = false;
+    const int64_t auto_record_arm_us =
+        esp_timer_get_time() +
+        static_cast<int64_t>(pakt::benchcfg::kAutoStartRxRecorderDelayMs) * 1000LL;
 
     // ADC gain tracking: apply change when aprs_task updates g_adc_gain_req.
     uint8_t applied_gain = 0;
 
     for (;;) {
+        if constexpr (pakt::benchcfg::kEnableAprsStageCRxRecord &&
+                      pakt::benchcfg::kAutoStartRxRecorderOnBoot) {
+            if (!auto_record_armed &&
+                !g_rx_record_active.load(std::memory_order_relaxed) &&
+                !g_rx_record_valid.load(std::memory_order_relaxed) &&
+                esp_timer_get_time() >= auto_record_arm_us &&
+                ensure_rx_record_buffer()) {
+                g_adc_gain_req.store(pakt::benchcfg::kAprsStageCRecordAdcGainStep,
+                                     std::memory_order_relaxed);
+                g_rx_record_samples.store(0, std::memory_order_relaxed);
+                g_rx_record_valid.store(false, std::memory_order_relaxed);
+                g_rx_record_arm.store(true, std::memory_order_release);
+                auto_record_armed = true;
+                ESP_LOGI("audio",
+                         "AUTO RECORD: armed 30 s RX capture at +%.1f dB (%u Hz). SEND APRS NOW.",
+                         static_cast<double>(pakt::benchcfg::kAprsStageCRecordAdcGainDb),
+                         static_cast<unsigned>(kRxRecordSampleRateHz));
+            }
+            if (auto_record_armed &&
+                !rx_record_dumped &&
+                g_rx_record_valid.load(std::memory_order_acquire)) {
+                dump_rx_record_wav_base64(nullptr);
+                rx_record_dumped = true;
+            }
+        }
+
         size_t bytes_read = 0;
         esp_err_t err = i2s_channel_read(rx_chan, rx_buf, sizeof(rx_buf),
                                          &bytes_read, pdMS_TO_TICKS(50));
@@ -864,9 +1074,20 @@ static void audio_pipeline_run()
             const size_t stereo_samples = bytes_read / sizeof(int16_t);
             const size_t frames = stereo_samples / 2;
 
-            // Demux left channel; collect peak, abs-sum, clip count.
+            // Select the configured RX input view from the stereo I2S frame,
+            // then feed that conditioned mono stream into the recorder/demod.
             for (size_t i = 0; i < frames; ++i) {
-                mono_buf[i] = rx_buf[i * 2];
+                int16_t left  = rx_buf[i * 2];
+                int16_t right = rx_buf[i * 2 + 1];
+                if constexpr (pakt::benchcfg::kRxSwapStereoSlots) {
+                    const int16_t tmp = left;
+                    left = right;
+                    right = tmp;
+                }
+                mono_buf[i] = dc_block_sample(
+                    select_rx_sample(left, right,
+                                     &rx_left_abs_sum, &rx_right_abs_sum,
+                                     &rx_left_peak, &rx_right_peak));
                 const int32_t a = mono_buf[i] >= 0 ? mono_buf[i] : -mono_buf[i];
                 if (a > rx_window_peak)  rx_window_peak = a;
                 rx_window_abs_sum += static_cast<uint32_t>(a);
@@ -919,7 +1140,6 @@ static void audio_pipeline_run()
                         ? frames
                         : (kRxRecordSamples - rx_record_pos);
                 for (size_t i = 0; i < cap_copy; ++i) {
-                    const int32_t s = static_cast<int32_t>(mono_buf[i]);
                     g_rx_record_buf[rx_record_pos + i] =
                         static_cast<int16_t>(mono_buf[i]);
                 }
@@ -961,10 +1181,26 @@ static void audio_pipeline_run()
                     }
                 }
 
+                if constexpr (pakt::benchcfg::kRxLogChannelStats) {
+                    ESP_LOGI("audio",
+                             "RX channel stats: L(mean=%u peak=%d) R(mean=%u peak=%d) mono(mean=%u peak=%d clips=%u)",
+                             rx_window_samples ? (rx_left_abs_sum / rx_window_samples) : 0u,
+                             rx_left_peak,
+                             rx_window_samples ? (rx_right_abs_sum / rx_window_samples) : 0u,
+                             rx_right_peak,
+                             rx_window_samples ? (rx_window_abs_sum / rx_window_samples) : 0u,
+                             rx_window_peak,
+                             rx_window_clips);
+                }
+
                 rx_window_peak    = 0;
                 rx_window_abs_sum = 0;
                 rx_window_clips   = 0;
                 rx_window_samples = 0;
+                rx_left_abs_sum   = 0;
+                rx_right_abs_sum  = 0;
+                rx_left_peak      = 0;
+                rx_right_peak     = 0;
             }
 
             demod.process(mono_buf, frames);
@@ -988,7 +1224,7 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
         return false;
     }
 
-    pakt::AfskModulator mod(8000);
+    pakt::AfskModulator mod(kAudioSampleRateHz);
     size_t n_samples = mod.modulate_frame(ax25, len,
                                           g_tx_pcm_buf, kAfskMaxPcmSamples);
     if (n_samples == 0) {
@@ -1015,7 +1251,8 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
     static int16_t stereo_chunk[512]; // 256 stereo frames, task-static (safe: single task)
     static constexpr size_t kChunkFrames = sizeof(stereo_chunk) / (2 * sizeof(int16_t));
 
-    const uint32_t timeout_ms = static_cast<uint32_t>(n_samples * 1000u / 8000u) + 500u;
+    const uint32_t timeout_ms =
+        static_cast<uint32_t>(n_samples * 1000u / kAudioSampleRateHz) + 500u;
     esp_err_t err      = ESP_OK;
     size_t    bytes_written = 0;
     size_t    remaining = n_samples;
@@ -1043,8 +1280,10 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
         offset    += frames;
     }
 
-    // Wait for DMA to drain (4 descs × 256 frames / 8000 Hz ≈ 128 ms).
-    vTaskDelay(pdMS_TO_TICKS(150));
+    // Wait for DMA to drain (4 descs × 256 frames / sample_rate).
+    const uint32_t drain_ms =
+        static_cast<uint32_t>((4u * 256u * 1000u) / kAudioSampleRateHz) + 32u;
+    vTaskDelay(pdMS_TO_TICKS(drain_ms));
 
     g_radio->ptt(false);
 
@@ -1052,7 +1291,7 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
     ESP_LOGI("aprs", "afsk_tx: %s (%u samples, %u ms)",
              ok ? "ok" : "FAIL",
              static_cast<unsigned>(n_samples),
-             static_cast<unsigned>(n_samples * 1000u / 8000u));
+             static_cast<unsigned>(n_samples * 1000u / kAudioSampleRateHz));
     return ok;
 }
 
@@ -1239,7 +1478,7 @@ static void aprs_task(void *arg)
                         ESP_LOGE("aprs_bench",
                                  "Stage 0: ax25::encode failed — loopback skipped");
                     } else {
-                        pakt::AfskModulator lb_mod(8000);
+                        pakt::AfskModulator lb_mod(kAudioSampleRateHz);
                         size_t lb_pcm_len = lb_mod.modulate_frame(
                             lb_ax25, lb_ax25_len,
                             g_tx_pcm_buf, kAfskMaxPcmSamples);
@@ -1254,7 +1493,7 @@ static void aprs_task(void *arg)
                                      static_cast<unsigned>(lb_pcm_len));
 
                             bool lb_decoded = false;
-                            pakt::AfskDemodulator lb_demod(8000,
+                            pakt::AfskDemodulator lb_demod(kAudioSampleRateHz,
                                 [&lb_decoded](const uint8_t *, size_t) {
                                     lb_decoded = true;
                                 });
@@ -1551,14 +1790,18 @@ static void aprs_task(void *arg)
                 // Goertzel spectral analysis: quantify Bell 202 tone energy in the capture.
                 // A clean 1200 Hz mark tone gives mark_pwr >> space_pwr; vice versa for space.
                 // If neither is >> the other and both are near noise, signal is not AFSK.
-                const float mark_pwr  = goertzel_power(g_pcm_cap, kPcmCapLen, 1200.0f, 8000.0f);
-                const float space_pwr = goertzel_power(g_pcm_cap, kPcmCapLen, 2200.0f, 8000.0f);
-                const float noise_pwr = goertzel_power(g_pcm_cap, kPcmCapLen,  900.0f, 8000.0f);
+                const float mark_pwr  = goertzel_power(
+                    g_pcm_cap, kPcmCapLen, 1200.0f, static_cast<float>(kAudioSampleRateHz));
+                const float space_pwr = goertzel_power(
+                    g_pcm_cap, kPcmCapLen, 2200.0f, static_cast<float>(kAudioSampleRateHz));
+                const float noise_pwr = goertzel_power(
+                    g_pcm_cap, kPcmCapLen,  900.0f, static_cast<float>(kAudioSampleRateHz));
 
                 ESP_LOGI("aprs_bench", "");
                 ESP_LOGI("aprs_bench",
-                         "--- PCM SNAPSHOT: %u samples @ 8 kHz = 128 ms ---",
-                         static_cast<unsigned>(kPcmCapLen));
+                         "--- PCM SNAPSHOT: %u samples @ %u Hz = ~128 ms ---",
+                         static_cast<unsigned>(kPcmCapLen),
+                         static_cast<unsigned>(kAudioSampleRateHz));
                 ESP_LOGI("aprs_bench",
                          "  Tone analysis (Goertzel, normalised):");
                 ESP_LOGI("aprs_bench",
@@ -1582,7 +1825,8 @@ static void aprs_task(void *arg)
                              "      Check: HT VOX or PTT cable actually modulating RF.");
                 }
                 ESP_LOGI("aprs_bench",
-                         "    (signed int16, left channel, 8 kHz — copy for offline analysis)");
+                         "    (signed int16, selected mono path, %u Hz — copy for offline analysis)",
+                         static_cast<unsigned>(kAudioSampleRateHz));
                 // 16 samples per line.
                 char line[160];
                 for (size_t i = 0; i < kPcmCapLen; i += 16) {

@@ -27,7 +27,7 @@ namespace pakt::bench {
 //
 //   tx_chan        – I2S TX channel (ESP32-S3 → SGTL5000 DAC → HP jack)
 //   rx_chan        – I2S RX channel (SGTL5000 ADC LINE_IN → ESP32-S3)
-//   sample_rate_hz – must match codec config (8000 Hz)
+//   sample_rate_hz – must match codec config (currently 8000 Hz or 16000 Hz)
 void run_audio_bench(i2s_chan_handle_t tx_chan,
                      i2s_chan_handle_t rx_chan,
                      uint32_t         sample_rate_hz);

@@ -58,8 +58,9 @@ The project is therefore not MVP-complete until:
 - I2S/codec driver is wired
 - short APRS packet TX is now bench-proven on a separate receiver
 - receive-side analog path is active and now has bench instrumentation for peak/flag/FCS/decode counters
-- a PSRAM-backed RX WAV export path now exists for offline analysis, and bench stages are now selectable through `firmware/main/bench_profile_config.h`
-- SGTL5000 clock validation, gain tuning, trusted Bell 202 source validation, and final on-device APRS RX proof remain gating work
+- a PSRAM-backed RX WAV export path now exists for offline analysis, bench stages are now selectable through `firmware/main/bench_profile_config.h`, and the firmware now supports `16 kHz` codec/I2S debug mode plus configurable RX sample interpretation
+- scope captures from the analog RX nodes and the saved WAV captures do not yet agree; current debug focus has shifted toward SGTL5000 input/gain assumptions, I2S RX interpretation, and sample-conditioning fidelity
+- SGTL5000 capture-path closure, trusted Bell 202 source validation, and final on-device APRS RX proof remain gating work
 
 ## 3. Protocol gaps
 
@@ -112,6 +113,7 @@ Hardware-gated remaining items:
 - BLE security validation on physical hardware
 - SA818 + SGTL5000 electrical/audio validation under real RF conditions
 - trusted Bell 202 source confirmation into the prototype RX path
+- closure of the current SGTL5000/I2S/sample-capture mismatch seen between scope and saved WAVs
 - on-device APRS RX decode proof
 - final confirmation that the new `16-bit` Stage C recorder captures clean Bell 202 at the demod input
 
@@ -119,6 +121,7 @@ Hardware-gated remaining items:
 
 - Validate native + KISS coexistence under reconnect, chunk loss, and malformed input cases on hardware.
 - Measure SA818 TX deviation and record the actual AF attenuation settings used on the bench harness.
+- Continue SGTL5000/I2S/capture-path debugging using the new `16 kHz` recorder mode and sample-interpretation controls.
 - Re-run APRS RX with a trusted Bell 202 source and close the receive-margin question.
 - Run hardware bring-up follow-up for BLE security, SGTL5000 MCLK stability, and PTT safety.
 - Close remaining hardware-gated RF/audio/GPS/power items.

@@ -8,11 +8,13 @@
   - codec/radio path boots and bench audio stages run
   - APRS packet TX has been received externally in a supervised setup
   - RX analog/audio path is active, instrumented, and can now be recorded to a PSRAM-backed WAV export
+  - RX debug path is now bench-configurable at the firmware level, including channel selection and sample conditioning controls
+  - a `16-bit / 16 kHz` RX capture path is now running on hardware
 - Still open:
   - on-device APRS RX decode from a trusted Bell 202 source
   - SA818 TX deviation measurement
   - BLE safety/security hardware validation
-  - final RX margin closure with the new `16-bit` recorder path
+  - final RX margin closure through the SGTL5000/I2S/sample path, where the latest suspicion is now concentrated
 
 ## Main Sections
 - `aprs_mvp_docs/` — canonical product, protocol, architecture, QA, and status docs

@@ -273,8 +273,10 @@ static void stage5_tx_audio_sequence(gpio_num_t           ptt_gpio,
         }
     }
 
-    // Drain DMA (4 descs × 256 frames / 8 kHz ≈ 128 ms).
-    vTaskDelay(pdMS_TO_TICKS(150));
+    // Drain DMA (4 descs × 256 frames / sample_rate_hz).
+    const uint32_t drain_ms =
+        static_cast<uint32_t>((4u * 256u * 1000u) / sample_rate_hz) + 32u;
+    vTaskDelay(pdMS_TO_TICKS(drain_ms));
 
     gpio_set_level(ptt_gpio, 1);    // PTT HIGH = RX/idle
     ESP_LOGI(kTag, "  PTT deasserted. TX sequence complete.");
