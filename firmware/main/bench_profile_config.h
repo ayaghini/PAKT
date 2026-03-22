@@ -20,8 +20,8 @@ enum class RxInputMode : uint8_t {
 };
 
 // Top-level benches.
-inline constexpr bool kEnableAudioBench = false;
-inline constexpr bool kEnableSa818Bench = false;
+inline constexpr bool kEnableAudioBench = true;
+inline constexpr bool kEnableSa818Bench = true;
 inline constexpr bool kEnableAprsBench  = true;
 
 // Audio/codec debug rate.
@@ -31,12 +31,12 @@ inline constexpr bool kEnableAprsBench  = true;
 inline constexpr uint32_t kAudioSampleRateHz = 16000;
 
 // APRS bench sub-stages.
-inline constexpr bool kEnableAprsStage0Loopback    = false;
-inline constexpr bool kEnableAprsStageATxBurst     = false;
-inline constexpr bool kEnableAprsStageBRxGainSweep = false;
-inline constexpr bool kEnableAprsStageBPcmSnapshot = false;  // depends on Stage B
+inline constexpr bool kEnableAprsStage0Loopback    = true;
+inline constexpr bool kEnableAprsStageATxBurst     = true;
+inline constexpr bool kEnableAprsStageBRxGainSweep = true;
+inline constexpr bool kEnableAprsStageBPcmSnapshot = true;  // depends on Stage B
 inline constexpr bool kEnableAprsStageCRxRecord    = true;
-inline constexpr bool kAutoStartRxRecorderOnBoot   = true;
+inline constexpr bool kAutoStartRxRecorderOnBoot   = false;
 inline constexpr uint32_t kAutoStartRxRecorderDelayMs = 5000;
 
 // RX sample-path debug controls.

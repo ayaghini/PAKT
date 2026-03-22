@@ -16,8 +16,11 @@ has now cleared the core codec and radio bring-up steps:
   visibility for the MAX17048 and M9N, SA818 UART handshake/config, staged PTT/audio tests,
   and short APRS packet TX receipt on a separate receiver
 
-Today’s bench work materially improved the RF picture:
-- APRS packet TX has been bench-proven in at least one supervised setup
+Recent bench work materially improved the RF picture:
+- SA818 UART handshake/config recovered and is now responding again on hardware
+- staged PTT test and 10-tone TX bench are confirmed working on the current prototype
+- APRS packet TX is now bench-proven again on the current hardware state, with packets
+  received externally during the restored full test flow
 - RX analog/audio activity reaches the demodulator and now has stronger instrumentation
 - RX debug now includes PSRAM-backed WAV export, selectable bench stages, selectable
   sample-path conditioning, and a `16 kHz` capture mode
@@ -35,15 +38,15 @@ The project is not MVP-complete yet because hardware validation still gates the 
 | Area | Status | Notes |
 |---|---|---|
 | Core firmware architecture | `strong` | AX.25/APRS, AFSK, BLE, KISS-over-BLE, scheduling, and host tooling are implemented |
-| Bench bring-up | `in progress` | I2C, codec bring-up, SA818 UART/PTT, and staged audio tests are working |
-| APRS TX over RF | `partially proven` | short APRS packet burst reportedly decoded on a separate receiver |
+| Bench bring-up | `in progress` | I2C, codec bring-up, SA818 UART/config, PTT, staged TX audio, and APRS TX bench are working |
+| APRS TX over RF | `proven on current prototype` | tone sequence and APRS packets were heard/received again after SA818 recovery on 2026-03-21 |
 | APRS RX over RF | `not yet proven` | RX analog path is alive, but the prototype has not yet decoded a valid on-air APRS frame; current suspicion is in the codec/sample-capture path |
 | BLE/KISS hardware validation | `pending` | software-complete enough for hardware validation |
 | MVP milestone | `open` | blocked by RF validation, RX proof, BLE safety validation, and remaining hardware gates
 
 ## Progress Summary
 - Software stack is largely implemented and test-backed.
-- Prototype hardware can boot the codec/radio path and transmit APRS packets over RF.
+- Prototype hardware can boot the codec/radio path, recover SA818 control, and transmit APRS packets over RF.
 - Demodulator instrumentation now exposes RX peak, flag, FCS-reject, and decode counters during bench work.
 - Bench stages are now selectable through [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h), so debug sessions can run only the needed benches/stages instead of the full boot-time sequence.
 - Full RX recorder/export now works through PSRAM-backed WAV capture, and the firmware can export the captured demod-input audio as base64 WAV over serial for offline analysis.
@@ -59,9 +62,9 @@ The project is not MVP-complete yet because hardware validation still gates the 
   - on-device APRS RX still unproven
 
 ## Immediate Next Steps
-1. Compare the new `16-bit / 16 kHz` captured WAVs against the scope captures to isolate where the digital path stops matching the analog waveform.
+1. Measure and record SA818 TX deviation under the actual `LINE_OUT -> AF_IN` attenuation network.
 2. Continue SGTL5000/I2S capture-path debugging with the new sample-rate and sample-interpretation controls in `bench_profile_config.h`.
-3. Measure and record SA818 TX deviation under the actual `LINE_OUT -> AF_IN` attenuation network.
+3. Re-run APRS RX against the now-restored TX/SA818 baseline and close the on-device decode gap.
 4. Resume BLE bonded-write and PTT fail-safe validation on live hardware after RX capture-path closure.
 
 ## Bench Profile
@@ -79,7 +82,7 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - The same file now controls the audio debug sample rate and RX sample interpretation path.
 
 ## Current Status
-- Phase: prototype hardware bring-up in progress, with packet TX proven and RX troubleshooting focused on codec/sample-capture validation
+- Phase: prototype hardware bring-up in progress, with packet TX proven on the current prototype and RX troubleshooting focused on codec/sample-capture validation
 - Firmware build flow: ESP-IDF with `idf.py`
 - Host test flow: raw CMake only for `firmware/test_host`
 - Canonical wire-format source: `docs/aprs_mvp_docs/payload_contracts.md`
@@ -101,6 +104,12 @@ The project is not MVP-complete yet because hardware validation still gates the 
   - `GPIO13` `SA818_RX_CTRL`
   - `GPIO9` `SA818_TX_STAT`
   - `GPIO11` `SA818_PTT`
+- Restored and re-verified on 2026-03-21:
+  - `AT+DMOCONNECT` handshake passes
+  - `AT+DMOSETGROUP` frequency config passes
+  - staged PTT test passes
+  - 10-tone TX bench is audible on a receiver
+  - APRS packet TX is received externally
 - Bench modules now in the firmware tree:
   - `firmware/main/audio_bench_test/`
   - `firmware/main/sa818_bench_test/`

@@ -39,23 +39,77 @@ namespace pakt::bench {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+static void log_uart_rx_debug(uart_port_t port, const char *context)
+{
+    size_t pending = 0;
+    const esp_err_t err = uart_get_buffered_data_len(port, &pending);
+    if (err != ESP_OK) {
+        ESP_LOGW(kTag, "  UART diag (%s): uart_get_buffered_data_len failed: %s",
+                 context, esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGI(kTag, "  UART diag (%s): pending_rx=%u bytes",
+             context, static_cast<unsigned>(pending));
+    if (pending == 0) return;
+
+    uint8_t raw[64];
+    const int to_read = pending < sizeof(raw) ? static_cast<int>(pending)
+                                              : static_cast<int>(sizeof(raw));
+    const int n = uart_read_bytes(port, raw, to_read, 0);
+    if (n <= 0) {
+        ESP_LOGW(kTag, "  UART diag (%s): pending bytes reported, but raw read returned %d",
+                 context, n);
+        return;
+    }
+
+    char hexbuf[3 * sizeof(raw) + 1];
+    char asciibuf[sizeof(raw) + 1];
+    size_t hp = 0;
+    for (int i = 0; i < n && hp + 3 < sizeof(hexbuf); ++i) {
+        hp += static_cast<size_t>(snprintf(hexbuf + hp, sizeof(hexbuf) - hp,
+                                           "%02X ", raw[i]));
+        asciibuf[i] = (raw[i] >= 0x20 && raw[i] < 0x7F)
+                          ? static_cast<char>(raw[i])
+                          : '.';
+    }
+    if (hp > 0 && hexbuf[hp - 1] == ' ') --hp;
+    hexbuf[hp] = '\0';
+    asciibuf[n] = '\0';
+
+    ESP_LOGI(kTag, "  UART diag (%s): raw_rx_hex=[%s]", context, hexbuf);
+    ESP_LOGI(kTag, "  UART diag (%s): raw_rx_ascii=\"%s\"", context, asciibuf);
+}
+
 // Send an AT command and read the response.
 // Logs the raw command and raw response bytes.
 // Returns number of bytes read (0 = no response within timeout).
 static size_t at_exchange(pakt::ISa818Transport &t,
+                           uart_port_t   port,
                            const char *cmd,
                            char       *resp,
                            size_t      resp_len,
                            uint32_t    timeout_ms = 1500)
 {
     ESP_LOGI(kTag, "  TX: %s", cmd); // cmd includes \r\n but ESP log trims trailing whitespace
-    t.write(cmd, strlen(cmd));
+    const bool write_ok = t.write(cmd, strlen(cmd));
+    ESP_LOGI(kTag, "  TX write: %s", write_ok ? "ok" : "FAILED");
+    if (port >= UART_NUM_0 && port < UART_NUM_MAX) {
+        const esp_err_t tx_done = uart_wait_tx_done(port, pdMS_TO_TICKS(100));
+        if (tx_done != ESP_OK) {
+            ESP_LOGW(kTag, "  UART diag: uart_wait_tx_done failed: %s",
+                     esp_err_to_name(tx_done));
+        }
+    }
     size_t n = t.read(resp, resp_len - 1, timeout_ms);
     resp[n] = '\0';
 
     if (n == 0) {
         ESP_LOGW(kTag, "  RX: <no response within %lu ms>",
                  static_cast<unsigned long>(timeout_ms));
+        if (port >= UART_NUM_0 && port < UART_NUM_MAX) {
+            log_uart_rx_debug(port, cmd);
+        }
     } else {
         // Log printable summary; replace control chars with '.' for display.
         char display[64];
@@ -123,7 +177,7 @@ static void write_silence_stereo(i2s_chan_handle_t tx, uint32_t ms, uint32_t sr)
 
 // ── Stage implementations ─────────────────────────────────────────────────────
 
-static bool stage1_uart_handshake(pakt::ISa818Transport &t)
+static bool stage1_uart_handshake(pakt::ISa818Transport &t, uart_port_t port)
 {
     ESP_LOGI(kTag, "");
     ESP_LOGI(kTag, "--- STAGE 1: UART HANDSHAKE (AT+DMOCONNECT) ---");
@@ -131,7 +185,7 @@ static bool stage1_uart_handshake(pakt::ISa818Transport &t)
     char resp[64];
     for (int attempt = 1; attempt <= 3; ++attempt) {
         ESP_LOGI(kTag, "  Attempt %d/3 ...", attempt);
-        size_t n = at_exchange(t, "AT+DMOCONNECT\r\n", resp, sizeof(resp));
+        size_t n = at_exchange(t, port, "AT+DMOCONNECT\r\n", resp, sizeof(resp));
         if (n > 0 && resp_ok(resp, "+DMOCONNECT")) {
             ESP_LOGI(kTag, "  >>> PASS: SA818 handshake OK on attempt %d", attempt);
             return true;
@@ -148,12 +202,12 @@ static bool stage1_uart_handshake(pakt::ISa818Transport &t)
     return false;
 }
 
-static void stage2_version_query(pakt::ISa818Transport &t)
+static void stage2_version_query(pakt::ISa818Transport &t, uart_port_t port)
 {
     ESP_LOGI(kTag, "");
     ESP_LOGI(kTag, "--- STAGE 2: VERSION QUERY (AT+DMOVERQ, informational) ---");
     char resp[64];
-    size_t n = at_exchange(t, "AT+DMOVERQ\r\n", resp, sizeof(resp), 1500);
+    size_t n = at_exchange(t, port, "AT+DMOVERQ\r\n", resp, sizeof(resp), 1500);
     if (n == 0) {
         ESP_LOGW(kTag, "  No response (module may not support AT+DMOVERQ — not a failure).");
     } else {
@@ -161,7 +215,7 @@ static void stage2_version_query(pakt::ISa818Transport &t)
     }
 }
 
-static bool stage3_frequency_config(pakt::ISa818Transport &t)
+static bool stage3_frequency_config(pakt::ISa818Transport &t, uart_port_t port)
 {
     ESP_LOGI(kTag, "");
     ESP_LOGI(kTag, "--- STAGE 3: FREQUENCY CONFIGURATION ---");
@@ -170,7 +224,7 @@ static bool stage3_frequency_config(pakt::ISa818Transport &t)
     // BW=1 (25 kHz), TXF=RXF=144.3900, CTCSS=0000 (none), SQ=1
     const char *cmd = "AT+DMOSETGROUP=1,144.3900,144.3900,0000,1,0000\r\n";
     char resp[64];
-    size_t n = at_exchange(t, cmd, resp, sizeof(resp));
+    size_t n = at_exchange(t, port, cmd, resp, sizeof(resp));
 
     if (n > 0 && resp_ok(resp, "+DMOSETGROUP")) {
         ESP_LOGI(kTag, "  >>> PASS: SA818 accepted frequency configuration.");
@@ -300,6 +354,7 @@ static void stage5_tx_audio_sequence(gpio_num_t           ptt_gpio,
 // Operator action: key a nearby HT on 144.390 MHz and speak for several
 // seconds; the log should show peak_abs > 500 while the radio is transmitting.
 static void stage6_rx_audio_capture(pakt::ISa818Transport &t,
+                                     uart_port_t            port,
                                      RxPeakFn              rx_peak_fn)
 {
     ESP_LOGI(kTag, "");
@@ -310,9 +365,9 @@ static void stage6_rx_audio_capture(pakt::ISa818Transport &t,
     ESP_LOGI(kTag, "  Setting squelch=0 (open) and volume=8 (max AF_OUT level)...");
     {
         char resp[64];
-        at_exchange(t, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,0,0000\r\n",
+        at_exchange(t, port, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,0,0000\r\n",
                     resp, sizeof(resp));
-        at_exchange(t, "AT+DMOSETVOLUME=8\r\n", resp, sizeof(resp));
+        at_exchange(t, port, "AT+DMOSETVOLUME=8\r\n", resp, sizeof(resp));
     }
 
     ESP_LOGI(kTag, "");
@@ -366,7 +421,7 @@ static void stage6_rx_audio_capture(pakt::ISa818Transport &t,
     ESP_LOGI(kTag, "  Restoring squelch=1...");
     {
         char resp[64];
-        at_exchange(t, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,1,0000\r\n",
+        at_exchange(t, port, "AT+DMOSETGROUP=1,144.3900,144.3900,0000,1,0000\r\n",
                     resp, sizeof(resp));
     }
     ESP_LOGI(kTag, "  Stage 6 complete.");
@@ -393,23 +448,28 @@ void run_sa818_bench(pakt::ISa818Transport &transport,
     ESP_LOGI(kTag, "##############################################");
 
     // Stage 1 is required; skip audio stages if comms fail.
-    bool comms_ok = stage1_uart_handshake(transport);
-    stage2_version_query(transport);
+    bool comms_ok = stage1_uart_handshake(transport, uart_port);
+    stage2_version_query(transport, uart_port);
 
     bool cfg_ok = false;
     if (comms_ok) {
-        cfg_ok = stage3_frequency_config(transport);
+        cfg_ok = stage3_frequency_config(transport, uart_port);
     } else {
         ESP_LOGW(kTag, "  Skipping stages 3-6: no UART communication with SA818.");
     }
 
-    if (comms_ok) {
+    if (comms_ok && cfg_ok) {
         stage4_ptt_toggle(ptt_gpio);
         // Stage 5 (TX) runs first: waits for I2S to be ready, then transmits
         // the 10-tone sequence.  After this returns, audio_task's demod loop
         // is live, so Stage 6 (RX) can read live peak stats via rx_peak_fn.
         stage5_tx_audio_sequence(ptt_gpio, p_i2s_tx, sample_rate_hz, tx_wait_ms);
-        stage6_rx_audio_capture(transport, rx_peak_fn);
+        stage6_rx_audio_capture(transport, uart_port, rx_peak_fn);
+    } else if (comms_ok) {
+        ESP_LOGW(kTag,
+                 "  Skipping stages 4-6: SA818 accepted UART handshake but failed frequency setup.");
+        ESP_LOGW(kTag,
+                 "  TX/RX bench is suppressed to avoid transmitting on an unknown radio state.");
     }
 
     ESP_LOGI(kTag, "");

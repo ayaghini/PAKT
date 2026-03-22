@@ -259,6 +259,7 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
     char line[65];
     size_t line_pos = 0;
     size_t emitted_lines = 0;
+    const bool task_wdt_registered = (esp_task_wdt_status(nullptr) == ESP_OK);
 
     for (size_t i = 0; i < len; i += 3) {
         const size_t remain = len - i;
@@ -284,7 +285,9 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
                     watchdog->heartbeat(
                         static_cast<uint32_t>(esp_timer_get_time() / 1000));
                 }
-                esp_task_wdt_reset();
+                if (task_wdt_registered) {
+                    esp_task_wdt_reset();
+                }
                 vTaskDelay(pdMS_TO_TICKS(1));
             }
         }
@@ -302,7 +305,9 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
             watchdog->heartbeat(
                 static_cast<uint32_t>(esp_timer_get_time() / 1000));
         }
-        esp_task_wdt_reset();
+        if (task_wdt_registered) {
+            esp_task_wdt_reset();
+        }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
@@ -387,7 +392,7 @@ extern "C" void app_main(void)
 
     xTaskCreate(audio_task,    "audio",    8192, nullptr, 8, nullptr);
     xTaskCreate(radio_task,    "radio",    4096, nullptr, 7, nullptr);
-    xTaskCreate(watchdog_task, "watchdog", 2048, nullptr, 6, nullptr);
+    xTaskCreate(watchdog_task, "watchdog", 4096, nullptr, 6, nullptr);
     xTaskCreate(gps_task,      "gps",      4096, nullptr, 5, nullptr);
     xTaskCreate(aprs_task,     "aprs",     6144, nullptr, 5, nullptr);
     xTaskCreate(ble_task,      "ble",      8192, nullptr, 4, nullptr);
@@ -419,6 +424,7 @@ static void radio_task(void *arg)
     static constexpr int         kUartTxPin = 13;   // SA818_RX_CTRL (ESP TX → SA818 RXD)
     static constexpr int         kUartRxPin = 9;    // SA818_TX_STAT (SA818 TXD → ESP RX)
     static constexpr int         kBaud      = 9600;
+    static constexpr uint32_t    kSa818BootSettleMs = 2000;
 
     // Configure PTT GPIO: output, default HIGH (PTT off).
     gpio_config_t ptt_cfg = {};
@@ -444,10 +450,32 @@ static void radio_task(void *arg)
         .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_DEFAULT,
     };
-    uart_driver_install(kUartPort, 256, 0, 0, nullptr, 0);
-    uart_param_config(kUartPort, &uart_cfg);
-    uart_set_pin(kUartPort, kUartTxPin, kUartRxPin,
-                 UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    esp_err_t err = uart_driver_install(kUartPort, 256, 0, 0, nullptr, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE("radio", "uart_driver_install(UART_NUM_%d) failed: %s",
+                 static_cast<int>(kUartPort), esp_err_to_name(err));
+        for (;;) { vTaskDelay(pdMS_TO_TICKS(5000)); }
+    }
+    err = uart_param_config(kUartPort, &uart_cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE("radio", "uart_param_config(UART_NUM_%d) failed: %s",
+                 static_cast<int>(kUartPort), esp_err_to_name(err));
+        for (;;) { vTaskDelay(pdMS_TO_TICKS(5000)); }
+    }
+    err = uart_set_pin(kUartPort, kUartTxPin, kUartRxPin,
+                       UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    if (err != ESP_OK) {
+        ESP_LOGE("radio", "uart_set_pin(UART_NUM_%d, tx=%d, rx=%d) failed: %s",
+                 static_cast<int>(kUartPort), kUartTxPin, kUartRxPin,
+                 esp_err_to_name(err));
+        for (;;) { vTaskDelay(pdMS_TO_TICKS(5000)); }
+    }
+    uart_flush_input(kUartPort);
+    ESP_LOGI("radio",
+             "UART%d configured: tx=GPIO%d rx=GPIO%d baud=%d; waiting %u ms for SA818 boot",
+             static_cast<int>(kUartPort), kUartTxPin, kUartRxPin, kBaud,
+             static_cast<unsigned>(kSa818BootSettleMs));
+    vTaskDelay(pdMS_TO_TICKS(kSa818BootSettleMs));
 
     // Construct concrete transport and radio driver.
     static pakt::Sa818UartTransport transport(kUartPort);

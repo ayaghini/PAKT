@@ -45,7 +45,7 @@ using RxPeakFn = int32_t (*)();
 //
 //   transport      – configured UART transport (radio_task creates this before calling)
 //   ptt_gpio       – active-low PTT GPIO (HIGH = off, LOW = TX asserted)
-//   uart_port      – used only for log display (communication is via transport)
+//   uart_port      – used for low-level UART diagnostics alongside transport I/O
 //   p_i2s_tx       – pointer to the global I2S TX handle; bench polls until
 //                    non-null for Stage 5 (TX audio). Pass nullptr to skip.
 //   sample_rate_hz – I2S sample rate (must match audio init; typically 8000 or 16000)

@@ -5,6 +5,49 @@ Purpose: rolling implementation and verification ledger for the current MVP bran
 
 ---
 
+## SA818 recovery + TX re-validation (2026-03-21)
+
+Status: hardware tested during the current working session.
+
+What changed in firmware before the successful re-test:
+- `firmware/main/main.cpp`
+  - added explicit UART init error checking for `uart_driver_install`, `uart_param_config`, and `uart_set_pin`
+  - added UART RX flush before first SA818 handshake
+  - added a controlled `2 s` SA818 settle delay before the first `AT+DMOCONNECT`
+  - increased `watchdog_task` stack size after a debug-image stack overflow was observed
+- `firmware/main/sa818_bench_test/sa818_bench_test.cpp`
+  - added low-level UART diagnostics around SA818 exchanges:
+    - TX write success logging
+    - `uart_get_buffered_data_len()` checks after timeouts
+    - raw RX-byte dump path for any pending bytes
+  - tightened bench safety so TX/RX stages do not proceed after failed frequency config
+
+Intermediate diagnostic result:
+- before the hardware reconnect/reseat, the firmware consistently showed:
+  - `TX write: ok`
+  - `pending_rx=0 bytes`
+- that established that the ESP side was transmitting commands but seeing no reply bytes at the UART driver level
+
+Successful hardware result after reconnect/reset:
+- `AT+DMOCONNECT` handshake passed on attempt 1
+- `AT+DMOSETGROUP` frequency configuration passed
+- staged PTT toggle passed
+- Stage 5 10-tone TX sequence ran and was heard on a receiver
+- APRS packet TX was again received externally from the prototype
+
+Current status impact:
+- the current prototype is back in a known-good TX state
+- SA818 control path is responsive again on the live hardware
+- APRS TX proof is refreshed on the current wiring/firmware state, not only in older logs
+- the main remaining open hardware question is still on-device APRS RX decode quality
+
+Recommended next step from this restored baseline:
+- hold TX as proven for now, then continue focused RX troubleshooting against this known-good SA818/codec/TX state
+- highest RF calibration task remains TX deviation measurement
+- highest functional gap remains on-device APRS RX decode proof
+
+---
+
 ## Prototype bench workflow + RX recorder update (2026-03-20)
 
 Status: implemented in the repo during the current working session; firmware build re-verification was blocked by the local ESP-IDF environment on this machine.

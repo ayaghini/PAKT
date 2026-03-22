@@ -109,6 +109,7 @@ Driver: `firmware/components/radio_sa818/Sa818Radio.cpp` — wired into `radio_t
 4. [ ] Confirm AT handshake visible on UART1 with logic analyser or USB-serial tap:
    - Firmware sends: `AT+DMOCONNECT\r\n`
    - SA818 responds: `+DMOCONNECT:0\r\n`
+   - If deeper UART debugging is enabled, the bench also logs `TX write: ok` and pending RX-byte diagnostics after timeouts
 5. [ ] Serial log shows frequency set: `AT+DMOSETGROUP=1,144.3900,144.3900,0000,1,0000\r\n`
    - SA818 responds: `+DMOSETGROUP:0\r\n`
 6. [ ] PTT polarity test — trigger a TX request via BLE; measure SA818 PTT pin:
@@ -117,6 +118,14 @@ Driver: `firmware/components/radio_sa818/Sa818Radio.cpp` — wired into `radio_t
 7. [ ] **Do not sustain TX** — immediately cancel or wait for timeout after polarity confirmed
 
 Record: SA818 UART response string, PTT voltage on assert/de-assert, V_RADIO under TX load.
+
+Current verified note from 2026-03-21:
+- the full test firmware again completed:
+  - `+DMOCONNECT:0`
+  - `+DMOSETGROUP:0`
+  - staged PTT toggle
+  - 10-tone TX bench
+  - externally received APRS packet TX
 
 **Failure modes:**
 - `SA818 init failed` in log → check UART wiring polarity (TX/RX swap is common)
@@ -191,6 +200,10 @@ Record: time to first fix, sat count at fix, lat/lon vs known reference.
 7. [ ] Repeat 5× while monitoring for resets, brownout events, or PTT stuck-on
 
 Record: decode success rate, receiving device/app used, decoded packet text, and any brownout or WDT reset events.
+
+Current verified note from 2026-03-21:
+- the current full test firmware and wiring state again produced APRS packets that were received externally after SA818 handshake/config recovery
+- this step should now treat TX functionality as a restored known-good baseline, while deviation and repeatability remain to be measured formally
 
 **Important:** hearing Bell 202 tones is not enough for Step 9 to pass; this step requires packet-level APRS decode on the receiving side.
 
