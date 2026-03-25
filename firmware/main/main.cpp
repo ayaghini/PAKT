@@ -690,18 +690,6 @@ static void i2c_scan_bus(i2c_master_bus_handle_t bus)
     }
 }
 
-static void i2c_scan_bus_repeated(i2c_master_bus_handle_t bus,
-                                  uint32_t duration_ms,
-                                  uint32_t interval_ms)
-{
-    const int64_t deadline_us =
-        esp_timer_get_time() + static_cast<int64_t>(duration_ms) * 1000;
-
-    while (esp_timer_get_time() < deadline_us) {
-        i2c_scan_bus(bus);
-        vTaskDelay(pdMS_TO_TICKS(interval_ms));
-    }
-}
 
 static bool i2c_probe_addr(i2c_master_bus_handle_t bus, uint8_t addr)
 {
@@ -910,9 +898,9 @@ static void audio_pipeline_run()
             return;
         }
 
-        // Bench bring-up aid: rescan for 35 s so a host can attach late and still
-        // observe every responding address on the shared audio/Qwiic bus.
-        i2c_scan_bus_repeated(i2c_bus, 35000, 5000);
+        // Single I2C scan before MCLK to log bus state.
+        // (Repeated 35 s scan disabled for focused RX test to save boot time.)
+        i2c_scan_bus(i2c_bus);
     }
 
     // ── I2S full-duplex channel (ESP32-S3 master, SGTL5000 slave) ────────────
@@ -1052,6 +1040,10 @@ static void audio_pipeline_run()
     int32_t  rx_left_peak      = 0;
     int32_t  rx_right_peak     = 0;
 
+    // Bell 202 tone energy tracking for per-second AFSK presence diagnostic.
+    float    max_g1200         = 0.0f;   // max goertzel_power(1200 Hz) in current window
+    float    max_g2200         = 0.0f;   // max goertzel_power(2200 Hz) in current window
+
     // PCM snapshot state — filled across multiple I2S reads until kPcmCapLen is reached.
     size_t pcm_cap_pos        = 0;
     bool   pcm_cap_collecting = false;
@@ -1128,7 +1120,7 @@ static void audio_pipeline_run()
             // trigger the capture; a real AFSK burst peaks > 10000 at nominal levels.
             if (!pcm_cap_collecting &&
                 g_pcm_cap_arm.load(std::memory_order_relaxed) &&
-                rx_window_peak > 5000) {
+                rx_window_peak > 2000) {
                 pcm_cap_collecting = true;
                 pcm_cap_pos = 0;
                 g_pcm_cap_arm.store(false, std::memory_order_relaxed);
@@ -1221,6 +1213,11 @@ static void audio_pipeline_run()
                              rx_window_clips);
                 }
 
+                ESP_LOGI("audio",
+                         "TONE eng: 1200Hz=%.5f 2200Hz=%.5f  (AFSK likely present if either > 0.002)",
+                         static_cast<double>(max_g1200),
+                         static_cast<double>(max_g2200));
+
                 rx_window_peak    = 0;
                 rx_window_abs_sum = 0;
                 rx_window_clips   = 0;
@@ -1229,6 +1226,24 @@ static void audio_pipeline_run()
                 rx_right_abs_sum  = 0;
                 rx_left_peak      = 0;
                 rx_right_peak     = 0;
+                max_g1200         = 0.0f;
+                max_g2200         = 0.0f;
+            }
+
+            // Bell 202 tone energy: track per-block Goertzel max for the 1-s report.
+            // At 8 kHz / 256 frames per block the frequency resolution is ~31 Hz —
+            // enough to distinguish 1200 Hz mark from 2200 Hz space.
+            // Pure sine at full scale ≈ 0.25; signal at ~30% FS ≈ 0.02;
+            // noise floor ≈ 0.0001.  Report threshold: > 0.002 indicates AFSK.
+            if (frames >= 64) {
+                const float g1200 = goertzel_power(mono_buf, frames,
+                                                    1200.0f,
+                                                    static_cast<float>(kSampleRateHz));
+                const float g2200 = goertzel_power(mono_buf, frames,
+                                                    2200.0f,
+                                                    static_cast<float>(kSampleRateHz));
+                if (g1200 > max_g1200) max_g1200 = g1200;
+                if (g2200 > max_g2200) max_g2200 = g2200;
             }
 
             demod.process(mono_buf, frames);
@@ -1671,10 +1686,16 @@ static void aprs_task(void *arg)
                 ESP_LOGI("aprs_bench", "    dec     : valid decoded frames (goal > 0)");
                 ESP_LOGI("aprs_bench", "");
 
-                if (g_radio->set_squelch(0)) {
-                    ESP_LOGI("aprs_bench", "  Squelch opened (SQ=0) for all passes.");
-                } else {
-                    ESP_LOGW("aprs_bench", "  set_squelch(0) failed; continuing with default SQ.");
+                {
+                    // Open squelch and set SA818 AF_OUT volume to max for best
+                    // RX sensitivity.  set_squelch() now applies immediately via
+                    // AT+DMOSETGROUP; set_volume() sends AT+DMOSETVOLUME.
+                    const bool sq_ok  = g_radio->set_squelch(0);
+                    const bool vol_ok = g_radio->set_volume(8);
+                    ESP_LOGI("aprs_bench",
+                             "  SA818 RX config: sq=0 %s  volume=8 %s",
+                             sq_ok  ? "(AT sent ok)" : "(AT FAILED)",
+                             vol_ok ? "(AT sent ok)" : "(AT FAILED)");
                 }
 
                 // PCM snapshot will be armed at the start of each pass while not yet captured.
@@ -1779,7 +1800,7 @@ static void aprs_task(void *arg)
                     // Re-arm PCM capture whenever signal is present this second
                     // but we don't yet have a valid high-signal snapshot.
                     // This catches signal events that started after pass-start arm was consumed.
-                    if (peak > 5000 &&
+                    if (peak > 2000 &&
                         !g_pcm_cap_valid.load(std::memory_order_relaxed) &&
                         !g_pcm_cap_arm.load(std::memory_order_relaxed)) {
                         g_pcm_cap_arm.store(true, std::memory_order_relaxed);
@@ -1893,6 +1914,7 @@ static void aprs_task(void *arg)
                 ESP_LOGI("aprs_bench", "  Export: serial will emit a base64 WAV after capture.");
 
                 g_radio->set_squelch(0);
+                g_radio->set_volume(8);
                 g_adc_gain_req.store(pakt::benchcfg::kAprsStageCRecordAdcGainStep,
                                      std::memory_order_relaxed);
                 vTaskDelay(pdMS_TO_TICKS(2000));

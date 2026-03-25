@@ -40,6 +40,7 @@ public:
     bool init()                                   override;
     bool set_freq(uint32_t rx_hz, uint32_t tx_hz) override;
     bool set_squelch(uint8_t level)               override;
+    bool set_volume(uint8_t level);               // AT+DMOSETVOLUME=N, N=1..8
     bool set_power(RadioPower power)              override;
     bool ptt(bool on)                             override;
     bool is_transmitting() const                  override { return transmitting_; }

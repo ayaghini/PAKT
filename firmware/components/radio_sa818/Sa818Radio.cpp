@@ -2,6 +2,7 @@
 #include "pakt/Sa818Radio.h"
 #include "pakt/Sa818CommandFormatter.h"
 #include "pakt/Sa818ResponseParser.h"
+#include <cstdio>
 #include <cstring>
 
 namespace pakt {
@@ -93,7 +94,30 @@ bool Sa818Radio::set_freq(uint32_t rx_hz, uint32_t tx_hz)
 bool Sa818Radio::set_squelch(uint8_t level)
 {
     squelch_ = level;
-    return true;   // applied on next set_freq() call
+    // If already initialized and a frequency is configured, apply immediately.
+    // Squelch is part of AT+DMOSETGROUP so a re-send is required; the caller
+    // cannot rely on the next set_freq() call because of the idempotency check.
+    if (!initialized_ || rx_hz_ == 0) return true;
+    char cmd[kCmdBufLen];
+    char resp[kRespBufLen];
+    const size_t n = Sa818CommandFormatter::set_group(
+        cmd, sizeof(cmd), rx_hz_, tx_hz_, squelch_, /*wide_band=*/true);
+    if (n == 0) return false;
+    if (!exchange(cmd, n, resp, sizeof(resp))) return false;
+    return Sa818ResponseParser::parse_set_group(resp) == Sa818ResponseParser::Result::Ok;
+}
+
+bool Sa818Radio::set_volume(uint8_t level)
+{
+    if (error_) return false;
+    char cmd[kCmdBufLen];
+    char resp[kRespBufLen];
+    const int n = snprintf(cmd, sizeof(cmd), "AT+DMOSETVOLUME=%u\r\n",
+                           static_cast<unsigned>(level));
+    if (n <= 0 || static_cast<size_t>(n) >= sizeof(cmd)) return false;
+    if (!exchange(cmd, static_cast<size_t>(n), resp, sizeof(resp))) return false;
+    const char *colon = strchr(resp, ':');
+    return colon && colon[1] == '0';
 }
 
 bool Sa818Radio::set_power(RadioPower power)

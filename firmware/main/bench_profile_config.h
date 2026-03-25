@@ -20,28 +20,35 @@ enum class RxInputMode : uint8_t {
 };
 
 // Top-level benches.
-inline constexpr bool kEnableAudioBench = true;
-inline constexpr bool kEnableSa818Bench = true;
+// Audio and SA818 benches are disabled for the focused APRS RX test.
+// Re-enable when verifying TX audio path or SA818 hardware bring-up.
+inline constexpr bool kEnableAudioBench = false;
+inline constexpr bool kEnableSa818Bench = false;
 inline constexpr bool kEnableAprsBench  = true;
 
 // Audio/codec debug rate.
 // Supported here:
-//   8000  Hz - original APRS bench rate
-//   16000 Hz - higher-fidelity debug/capture mode
-inline constexpr uint32_t kAudioSampleRateHz = 16000;
+//   8000  Hz - original APRS bench rate (MCLK_MULTIPLE_1024, BCLK=256 kHz)
+//   16000 Hz - higher-fidelity debug/capture mode (MCLK_MULTIPLE_512, BCLK=512 kHz)
+// Using 8 kHz for the focused RX test: simpler BCLK, fewer wiring variables.
+inline constexpr uint32_t kAudioSampleRateHz = 8000;
 
 // APRS bench sub-stages.
+// TX burst disabled: TX already verified; focused on RX decode.
+// Auto-recorder enabled: captures 30 s of demod input starting ~3 s after audio init.
 inline constexpr bool kEnableAprsStage0Loopback    = true;
-inline constexpr bool kEnableAprsStageATxBurst     = true;
+inline constexpr bool kEnableAprsStageATxBurst     = false;
 inline constexpr bool kEnableAprsStageBRxGainSweep = true;
 inline constexpr bool kEnableAprsStageBPcmSnapshot = true;  // depends on Stage B
 inline constexpr bool kEnableAprsStageCRxRecord    = true;
-inline constexpr bool kAutoStartRxRecorderOnBoot   = false;
-inline constexpr uint32_t kAutoStartRxRecorderDelayMs = 5000;
+inline constexpr bool kAutoStartRxRecorderOnBoot   = true;
+inline constexpr uint32_t kAutoStartRxRecorderDelayMs = 3000;
 
 // RX sample-path debug controls.
 // These affect the exact mono samples fed into the recorder and demodulator.
-inline constexpr RxInputMode kRxInputMode = RxInputMode::Left;
+// Stronger: auto-selects whichever LINE_IN channel (L or R) has higher amplitude.
+// Avoids silent input if SA818 AF_OUT is wired to the non-Left channel.
+inline constexpr RxInputMode kRxInputMode = RxInputMode::Stronger;
 inline constexpr bool kRxSwapStereoSlots = false;
 inline constexpr bool kRxByteSwapSamples = false;
 inline constexpr bool kRxEnableDcBlock   = true;
@@ -57,7 +64,7 @@ inline constexpr bool kLogSgtl5000Readback = true;
 //   6.0f  -> step 4
 //   12.0f -> step 8
 //   18.0f -> step 12
-inline constexpr float kAprsStageCRecordAdcGainDb = 12.0f;
+inline constexpr float kAprsStageCRecordAdcGainDb = 18.0f;
 inline constexpr uint8_t kAprsStageCRecordAdcGainStep =
     static_cast<uint8_t>(kAprsStageCRecordAdcGainDb / 1.5f);
 
