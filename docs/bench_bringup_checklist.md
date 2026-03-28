@@ -16,6 +16,15 @@ Bench selection note:
 - APRS Stage C can now be run as an isolated recorder/export workflow and has a configurable ADC gain step.
 - The audio pipeline sample rate is also selectable there (`8 kHz` or `16 kHz`);
   the current high-fidelity debug path prefers `16 kHz`.
+- A separate quiet capture profile now exists for low-noise RX debugging:
+  - `firmware/main/bench_profile_quiet_codec_capture.h`
+  - includes a `30 s` pre-roll countdown before recording starts
+  - uses framed binary chunk export instead of the older long base64 stream
+  - current known-good RX baseline:
+    - `16 kHz`
+    - full `512`-frame mono processing from each `2048-byte` I2S batched read
+    - Stage C SA818 volume `4`
+    - low ADC gain (`+1.5 dB` at the time of the successful decode run)
 
 ---
 
@@ -223,6 +232,11 @@ Current verified note from 2026-03-21:
 5. [ ] If no frame decodes, record whether `rx_peak_abs` changed anyway
 6. [ ] If deeper analysis is needed, run the 30-second RX recorder stage and save the emitted base64 WAV dump from serial for offline analysis
 7. [ ] Prefer the `16-bit` Stage C recorder path for new captures; use the selected ADC gain step in `bench_profile_config.h` to match the best observed RX margin
+8. [ ] For repeated RX investigations, prefer the quiet-capture profile and record the exact profile/mode used:
+   - left-only vs stereo-average
+   - sample rate
+   - ADC gain
+   - export method used
 
 Record: APRS source used, packet interval, approximate distance, decoded frame examples if any, `rx_peak_abs` behavior if decode fails, and whether a 30-second WAV capture was exported.
 
@@ -238,9 +252,40 @@ Current troubleshooting note from 2026-03-20:
   - use of the new RX debug controls in `bench_profile_config.h`:
     - `kRxInputMode`
     - `kRxSwapStereoSlots`
+
+Current handoff note from 2026-03-27:
+- the newer quiet-capture profile has produced repeated full `30 s` `16-bit` `16 kHz` WAV artifacts through a framed binary export path
+- this simpler capture flow appears somewhat cleaner than the older full-system/base64 workflow
+- however, do not yet assume that the waveform improvement is fully “real”
+- the current host-side reconstruction still has to undo newline rewriting introduced by serial transport, so some remaining artifact could still belong to the transfer path rather than the codec capture itself
+- the next investigator should therefore treat the quiet-capture artifacts as the best current evidence, but still provisional until cross-checked against a less ambiguous retrieval path
     - `kRxByteSwapSamples`
     - `kRxEnableDcBlock`
     - `kRxDcBlockPole`
+
+Current verified note from 2026-03-27 (later same session):
+- the quiet-profile RX path now has a confirmed firmware fix for a real capture bug:
+  - firmware was previously unpacking only half of each `2048-byte` batched I2S read
+  - this effectively fed the demodulator at `~8 kHz` while configured for `16 kHz`
+  - the corrected path now processes the full `512` mono frames per read
+- successful live indicators from the corrected run:
+  - `samp=15872` at `1 s`, then `31744`, `48128`, etc.
+  - Stage C SA818 volume reduced to `4` to eliminate the earlier full-scale clipping
+  - multiple log lines:
+    - `audio: AFSK: decoded AX.25 frame (61 bytes) → queue`
+- saved artifacts from the first successful corrected run:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/live_after_fix_run1.log`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_after_fix_run1.raw`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_after_fix_run1.wav`
+- this is now the preferred RX baseline for follow-up work
+
+Updated practical interpretation for Step 9b:
+- on-device APRS RX decode is now proven on hardware
+- this step should now focus on:
+  - repeatability across runs and sources
+  - decode margin / gain tuning
+  - documenting the known-good settings
+  - saving example decoded frames and corresponding WAV artifacts
 
 ---
 

@@ -24,8 +24,10 @@ Recent bench work materially improved the RF picture:
 - RX analog/audio activity reaches the demodulator and now has stronger instrumentation
 - RX debug now includes PSRAM-backed WAV export, selectable bench stages, selectable
   sample-path conditioning, and a `16 kHz` capture mode
-- on-device APRS RX is still not proven; current evidence now points more strongly
-  at the SGTL5000 / I2S / sample-capture path than at gross analog breadboard failure
+- a separate quiet-capture firmware profile now supports repeated `30 s` low-noise
+  captures with a countdown and framed binary export suitable for handoff analysis
+- on-device APRS RX is now proven on hardware after fixing a half-rate I2S capture bug
+  and reducing Stage C SA818 receive volume; the prototype now decodes APRS frames on-device
 
 The project is not MVP-complete yet because hardware validation still gates the milestone:
 - BLE security and PTT fail-safe validation on hardware
@@ -40,32 +42,36 @@ The project is not MVP-complete yet because hardware validation still gates the 
 | Core firmware architecture | `strong` | AX.25/APRS, AFSK, BLE, KISS-over-BLE, scheduling, and host tooling are implemented |
 | Bench bring-up | `in progress` | I2C, codec bring-up, SA818 UART/config, PTT, staged TX audio, and APRS TX bench are working |
 | APRS TX over RF | `proven on current prototype` | tone sequence and APRS packets were heard/received again after SA818 recovery on 2026-03-21 |
-| APRS RX over RF | `not yet proven` | RX analog path is alive, but the prototype has not yet decoded a valid on-air APRS frame; current suspicion is in the codec/sample-capture path |
+| APRS RX over RF | `proven on current prototype` | quiet-profile RX now decodes APRS on-device after fixing the half-rate capture bug and reducing Stage C volume |
 | BLE/KISS hardware validation | `pending` | software-complete enough for hardware validation |
 | MVP milestone | `open` | blocked by RF validation, RX proof, BLE safety validation, and remaining hardware gates
 
 ## Progress Summary
 - Software stack is largely implemented and test-backed.
-- Prototype hardware can boot the codec/radio path, recover SA818 control, and transmit APRS packets over RF.
+- Prototype hardware can boot the codec/radio path, recover SA818 control, transmit APRS packets over RF, and now decode APRS on-device.
 - Demodulator instrumentation now exposes RX peak, flag, FCS-reject, and decode counters during bench work.
 - Bench stages are now selectable through [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h), so debug sessions can run only the needed benches/stages instead of the full boot-time sequence.
-- Full RX recorder/export now works through PSRAM-backed WAV capture, and the firmware can export the captured demod-input audio as base64 WAV over serial for offline analysis.
+- Full RX recorder/export now works through PSRAM-backed WAV capture, and the quiet profile can export captured demod-input audio through a framed binary serial stream for offline reconstruction.
+- A real RX blocker was found and fixed: the audio pipeline was unpacking only half of each 2048-byte I2S read, effectively feeding the demodulator at `8 kHz` while configured for `16 kHz`.
+- After fixing that bug and lowering quiet-profile Stage C SA818 volume from `8` to `4`, the device decoded multiple on-air APRS frames in the same `30 s` window.
 - The RX path is now also configurable at the firmware level for:
   - `8 kHz` or `16 kHz` audio rate
   - left/right/average/stronger channel selection
   - stereo-slot swap
   - sample byte swap
   - firmware DC blocking
+- The current best debugging workflow is the separate quiet-capture profile.
 - The repo now distinguishes clearly between:
   - audio-path alive
   - packet TX proven
-  - on-device APRS RX still unproven
+  - on-device APRS RX now proven on the corrected quiet profile
 
 ## Immediate Next Steps
 1. Measure and record SA818 TX deviation under the actual `LINE_OUT -> AF_IN` attenuation network.
-2. Continue SGTL5000/I2S capture-path debugging with the new sample-rate and sample-interpretation controls in `bench_profile_config.h`.
-3. Re-run APRS RX against the now-restored TX/SA818 baseline and close the on-device decode gap.
-4. Resume BLE bonded-write and PTT fail-safe validation on live hardware after RX capture-path closure.
+2. Preserve the corrected quiet-profile RX settings as the new known-good baseline:
+   `16 kHz`, full 512-frame unpack, Stage C SA818 volume `4`, low ADC gain.
+3. Validate repeatability of on-device APRS RX decode across multiple runs and source radios.
+4. Resume BLE bonded-write and PTT fail-safe validation on live hardware now that the core RF TX/RX path is working.
 
 ## Bench Profile
 - Bench/debug stage selection is controlled in [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h).
@@ -82,7 +88,7 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - The same file now controls the audio debug sample rate and RX sample interpretation path.
 
 ## Current Status
-- Phase: prototype hardware bring-up in progress, with packet TX proven on the current prototype and RX troubleshooting focused on codec/sample-capture validation
+- Phase: prototype hardware bring-up in progress, with both packet TX and on-device APRS RX now proven on the current prototype; remaining work is calibration, repeatability, and safety validation
 - Firmware build flow: ESP-IDF with `idf.py`
 - Host test flow: raw CMake only for `firmware/test_host`
 - Canonical wire-format source: `docs/aprs_mvp_docs/payload_contracts.md`
@@ -115,9 +121,9 @@ The project is not MVP-complete yet because hardware validation still gates the 
   - `firmware/main/sa818_bench_test/`
 
 ## Next Steps
-- Compare saved `16 kHz` WAV captures against the oscilloscope captures and narrow the SGTL5000/I2S mismatch
-- Re-run APRS RX with the new capture controls and confirm at least one on-device APRS decode
-- If needed, tune SGTL5000 input/gain/sample interpretation using the new sample-path debug controls
+- Measure TX deviation and formalize the corrected RX baseline in the bench docs
+- Re-run APRS RX across multiple sessions to confirm repeatable decode margin on the corrected quiet profile
+- If needed, tune SGTL5000 input/gain/sample interpretation using the new sample-path debug controls, but the core on-device RX proof now exists
 - Measure and record SA818 TX deviation with the actual `LINE_OUT -> AF_IN` attenuation in place
 - Validate BLE security enforcement and PTT watchdog behavior on the live hardware stack
 - Freeze the harness values into the PCB-facing docs once AF levels, deviation, and PTT topology are measured

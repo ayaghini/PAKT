@@ -48,6 +48,144 @@ Recommended next step from this restored baseline:
 
 ---
 
+## Quiet-capture firmware and binary-export handoff (2026-03-27)
+
+Status: hardware tested during the current working session; intended as the current handoff baseline for continued APRS RX investigation.
+
+What changed in firmware:
+- `firmware/main/bench_profile_current.h`
+  - retained as the default/full bench profile
+- `firmware/main/bench_profile_quiet_codec_capture.h`
+  - separate low-noise debug profile for capture work
+  - disables unrelated tasks/bench chatter
+  - adds a `30 s` pre-roll countdown before recording starts
+  - current experiments used:
+    - left-only capture
+    - later stereo-average capture after both `LINE_IN_L` and `LINE_IN_R` were connected
+- `firmware/main/main.cpp`
+  - quiet-profile Stage C now prints a clear countdown and `RECORDING ACTIVE NOW — SEND APRS`
+  - serial export path no longer depends on long base64 lines for quiet-capture work
+  - recorder export now supports framed binary chunk streaming:
+    - `BEGIN`
+    - repeated `PAKT RX WAV CHUNK ...`
+    - `END`
+
+Why this was needed:
+- the previous long base64 export path was unreliable for repeated `30 s` captures
+- the new framed binary export made repeated full-length captures possible on the current bench setup
+- host reconstruction must still compensate for USB serial newline translation during transport
+
+Artifacts produced in the current session:
+- full quiet captures:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27.wav`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27_run2.wav`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27_run4.wav`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27_run5.wav`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27_retry.wav`
+- full quiet capture using stereo-average mode:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27_stereo_avg.wav`
+- representative raw logs for reconstruction:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_watch.log`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_watch_run2.log`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_watch_run4.log`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_watch_run5.log`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_watch_retry.log`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_stereo_avg.log`
+- one partially recovered run remained on disk for reference:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_2026-03-27_run3_partial.wav`
+
+What the quiet captures suggest:
+- the simpler quiet-capture implementation is operational and does appear cleaner than the earlier noisy/full-system capture flow
+- clipping is no longer the dominant problem in the best recent captures
+- some bursts are present at plausible operator-transmit times
+- however, the saved files still do not show convincing Bell 202 energy at `1200 Hz` / `2200 Hz`
+- the latest quiet captures still fail the “clean APRS AFSK visible in the recorder output” test
+
+Important caveat for follow-up:
+- do **not** overclaim that the quiet-capture firmware is definitively “more correct”
+- the current evidence only supports:
+  - it is a simpler and more reproducible capture path
+  - it produces repeated full-length artifacts
+  - it looks slightly better directionally than the older debug flow
+- it does **not** yet prove that the captured waveform is more faithful to the true analog signal
+- host-side reconstruction still has to undo serial transport newline rewriting during chunk recovery, so a future investigator should keep open the possibility that some remaining artifact is still introduced by the serial transfer path rather than by the recorder alone
+
+Conservative current conclusion:
+- the new quiet firmware is a better investigation tool, not yet a proof of capture correctness
+- APRS RX on-device remains unproven
+- next work should compare:
+  - quiet-capture WAVs
+  - direct scope observations
+  - and, ideally, a non-serial retrieval path or a short direct binary transfer
+to separate true codec/input behavior from any residual serial transport artifact
+
+Recommended next step for the next agent:
+- continue using the quiet-capture profile for repeatability
+- but treat “improved-looking capture” as provisional until it is cross-checked against a non-serial or less lossy retrieval method
+- preferred next milestone:
+  - confirm whether the apparent waveform improvement survives a capture path that bypasses the current serial chunk reconstruction assumptions
+
+---
+
+## Quiet-profile RX decode breakthrough (2026-03-27)
+
+Status: hardware tested successfully on the current prototype board during the current working session.
+
+Root cause found:
+- the quiet capture path was unpacking only half of each `2048-byte` I2S DMA read
+- the ESP-IDF driver was returning two `1024-byte` Packed16 descriptors per read
+- firmware only consumed `256` mono frames from that batch and silently discarded the second half
+- effect: the demodulator was effectively fed at `~8 kHz` while configured for `16 kHz`
+- that broke Bell 202 symbol timing and explains the earlier “flags/FCS noise but no stable decode” behavior
+
+Firmware changes now present in source:
+- `firmware/main/main.cpp`
+  - RX unpack path now sizes mono processing for `kDmaFrames * 2` and consumes the full batched read
+  - per-second Stage C `samp` counter now reflects the true sample flow
+- `firmware/main/bench_profile_quiet_codec_capture.h`
+  - quiet Stage C SA818 volume reduced from `8` to `4`
+  - this removed the full-scale clipping that had been present in earlier corrected-path attempts
+
+Successful hardware result:
+- board: current `4 MB flash / 2 MB PSRAM` prototype on `/dev/cu.usbmodem111101`
+- run log:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/live_after_fix_run1.log`
+- reconstructed artifacts:
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_after_fix_run1.raw`
+  - `/Users/macmini4/Desktop/PAKT/tmp/rx_captures/quiet_capture_after_fix_run1.wav`
+
+What the successful run proved:
+- sample flow fixed:
+  - `samp=15872` at `1 s`, then `31744`, `48128`, etc. during the window
+  - this is the expected `16 kHz` progression
+- clipping removed:
+  - peaks stayed roughly `5.5k–8.2k`, no more constant `32767/32768` saturation
+- on-device APRS RX decode succeeded:
+  - log lines:
+    - `audio: AFSK: decoded AX.25 frame (61 bytes) → queue`
+  - observed three times during the same `30 s` quiet-profile capture
+- demodulator counters remained sensible:
+  - `flags` increased substantially during the run
+  - `fcs_rej` also increased, showing there is still normal margin variation even though valid frames are now decoding
+
+Conservative new conclusion:
+- the earlier serial-export caveat is no longer the main question
+- the half-rate I2S unpack bug was a real firmware defect and fixing it materially changed behavior
+- on-device APRS RX is now proven on hardware
+- remaining work is no longer “can the prototype decode APRS at all?”
+- remaining work is:
+  - repeatability across runs and sources
+  - TX deviation measurement
+  - RX margin/calibration tuning
+  - BLE/PTT safety validation
+
+Recommended next step:
+- treat the corrected quiet profile as the new RX baseline
+- repeat RX decode on additional runs and sources to establish margin
+- then shift effort back to calibrated RF validation and system safety gates
+
+---
+
 ## Prototype bench workflow + RX recorder update (2026-03-20)
 
 Status: implemented in the repo during the current working session; firmware build re-verification was blocked by the local ESP-IDF environment on this machine.

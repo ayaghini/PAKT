@@ -279,7 +279,7 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
             line_pos = 0;
             ++emitted_lines;
 
-            if ((emitted_lines % 64u) == 0u) {
+            if ((emitted_lines % pakt::benchcfg::kExportFlushLineInterval) == 0u) {
                 fflush(stdout);
                 if (watchdog) {
                     watchdog->heartbeat(
@@ -288,7 +288,7 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
                 if (task_wdt_registered) {
                     esp_task_wdt_reset();
                 }
-                vTaskDelay(pdMS_TO_TICKS(1));
+                vTaskDelay(pdMS_TO_TICKS(pakt::benchcfg::kExportYieldMs));
             }
         }
     }
@@ -299,7 +299,7 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
         ++emitted_lines;
     }
 
-    if ((emitted_lines % 64u) != 0u) {
+    if ((emitted_lines % pakt::benchcfg::kExportFlushLineInterval) != 0u) {
         fflush(stdout);
         if (watchdog) {
             watchdog->heartbeat(
@@ -308,11 +308,40 @@ static void emit_base64_lines(const uint8_t *data, size_t len,
         if (task_wdt_registered) {
             esp_task_wdt_reset();
         }
-        vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(pdMS_TO_TICKS(pakt::benchcfg::kExportYieldMs));
     }
 }
 
-static void dump_rx_record_wav_base64(pakt::PttWatchdog *watchdog = nullptr)
+static void export_pump(pakt::PttWatchdog *watchdog = nullptr)
+{
+    const bool task_wdt_registered = (esp_task_wdt_status(nullptr) == ESP_OK);
+    fflush(stdout);
+    if (watchdog) {
+        watchdog->heartbeat(
+            static_cast<uint32_t>(esp_timer_get_time() / 1000));
+    }
+    if (task_wdt_registered) {
+        esp_task_wdt_reset();
+    }
+    vTaskDelay(pdMS_TO_TICKS(pakt::benchcfg::kExportYieldMs));
+}
+
+static void emit_binary_chunks(const uint8_t *data, size_t len,
+                               pakt::PttWatchdog *watchdog = nullptr)
+{
+    const size_t chunk_bytes = pakt::benchcfg::kExportBinaryChunkBytes;
+    for (size_t offset = 0; offset < len; offset += chunk_bytes) {
+        const size_t chunk_len = std::min(chunk_bytes, len - offset);
+        printf("-----PAKT RX WAV CHUNK %u %u-----\n",
+               static_cast<unsigned>(offset),
+               static_cast<unsigned>(chunk_len));
+        fwrite(data + offset, 1, chunk_len, stdout);
+        printf("\n");
+        export_pump(watchdog);
+    }
+}
+
+static void dump_rx_record_wav(pakt::PttWatchdog *watchdog = nullptr)
 {
     if (!g_rx_record_valid.load(std::memory_order_acquire) || !g_rx_record_buf) {
         ESP_LOGW("aprs_bench", "RX recorder dump skipped: no valid capture");
@@ -331,14 +360,24 @@ static void dump_rx_record_wav_base64(pakt::PttWatchdog *watchdog = nullptr)
              static_cast<unsigned>(data_bytes));
     ESP_LOGI("aprs_bench", "Capture format: mono 16-bit PCM WAV @ %u Hz",
              static_cast<unsigned>(kRxRecordSampleRateHz));
-    ESP_LOGI("aprs_bench",
-             "Copy everything between BEGIN/END markers to reconstruct the WAV file.");
-
-    printf("-----BEGIN PAKT RX WAV BASE64-----\n");
-    emit_base64_lines(wav_header, sizeof(wav_header), watchdog);
-    emit_base64_lines(reinterpret_cast<const uint8_t *>(g_rx_record_buf), data_bytes, watchdog);
-    printf("-----END PAKT RX WAV BASE64-----\n");
-    fflush(stdout);
+    if constexpr (pakt::benchcfg::kExportBinaryChunks) {
+        ESP_LOGI("aprs_bench",
+                 "Export: framed binary WAV stream (BEGIN/CHUNK/END markers).");
+        printf("-----BEGIN PAKT RX WAV BIN %u-----\n",
+               static_cast<unsigned>(sizeof(wav_header) + data_bytes));
+        emit_binary_chunks(wav_header, sizeof(wav_header), watchdog);
+        emit_binary_chunks(reinterpret_cast<const uint8_t *>(g_rx_record_buf), data_bytes, watchdog);
+        printf("-----END PAKT RX WAV BIN-----\n");
+        fflush(stdout);
+    } else {
+        ESP_LOGI("aprs_bench",
+                 "Copy everything between BEGIN/END markers to reconstruct the WAV file.");
+        printf("-----BEGIN PAKT RX WAV BASE64-----\n");
+        emit_base64_lines(wav_header, sizeof(wav_header), watchdog);
+        emit_base64_lines(reinterpret_cast<const uint8_t *>(g_rx_record_buf), data_bytes, watchdog);
+        printf("-----END PAKT RX WAV BASE64-----\n");
+        fflush(stdout);
+    }
 
     ESP_LOGI("aprs_bench", "RX recorder dump complete.");
 }
@@ -360,6 +399,7 @@ static void power_task(void *arg);
 extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "PAKT firmware v%s starting (IDF %s)", PAKT_FIRMWARE_VERSION, esp_get_idf_version());
+    ESP_LOGI(TAG, "Bench profile: %s", pakt::benchcfg::kProfileName);
 
     // PTT must be safe-off before any task starts.
     // The radio driver (Step 1) will assert this at init; document the intent here.
@@ -390,15 +430,29 @@ extern "C" void app_main(void)
         }
     }
 
-    xTaskCreate(audio_task,    "audio",    8192, nullptr, 8, nullptr);
-    xTaskCreate(radio_task,    "radio",    4096, nullptr, 7, nullptr);
-    xTaskCreate(watchdog_task, "watchdog", 4096, nullptr, 6, nullptr);
-    xTaskCreate(gps_task,      "gps",      4096, nullptr, 5, nullptr);
-    xTaskCreate(aprs_task,     "aprs",     6144, nullptr, 5, nullptr);
-    xTaskCreate(ble_task,      "ble",      8192, nullptr, 4, nullptr);
-    xTaskCreate(power_task,    "power",    2048, nullptr, 2, nullptr);
+    if constexpr (pakt::benchcfg::kStartAudioTask) {
+        xTaskCreate(audio_task, "audio", 8192, nullptr, 8, nullptr);
+    }
+    if constexpr (pakt::benchcfg::kStartRadioTask) {
+        xTaskCreate(radio_task, "radio", 4096, nullptr, 7, nullptr);
+    }
+    if constexpr (pakt::benchcfg::kStartWatchdogTask) {
+        xTaskCreate(watchdog_task, "watchdog", 4096, nullptr, 6, nullptr);
+    }
+    if constexpr (pakt::benchcfg::kStartGpsTask) {
+        xTaskCreate(gps_task, "gps", 4096, nullptr, 5, nullptr);
+    }
+    if constexpr (pakt::benchcfg::kStartAprsTask) {
+        xTaskCreate(aprs_task, "aprs", 6144, nullptr, 5, nullptr);
+    }
+    if constexpr (pakt::benchcfg::kStartBleTask) {
+        xTaskCreate(ble_task, "ble", 8192, nullptr, 4, nullptr);
+    }
+    if constexpr (pakt::benchcfg::kStartPowerTask) {
+        xTaskCreate(power_task, "power", 2048, nullptr, 2, nullptr);
+    }
 
-    ESP_LOGI(TAG, "All tasks created");
+    ESP_LOGI(TAG, "Selected tasks created");
 }
 
 // ── Task stubs ────────────────────────────────────────────────────────────────
@@ -575,6 +629,58 @@ static const char *rx_input_mode_name()
     return "unknown";
 }
 
+static const char *rx_unpack_mode_name()
+{
+    using pakt::benchcfg::RxUnpackMode;
+    switch (pakt::benchcfg::kRxUnpackMode) {
+    case RxUnpackMode::Packed16Stereo:    return "packed16-stereo";
+    case RxUnpackMode::Slot32Low16Stereo: return "slot32-low16-stereo";
+    case RxUnpackMode::Slot32High16Stereo:return "slot32-high16-stereo";
+    }
+    return "unknown";
+}
+
+static inline int16_t load_le16(const uint8_t *p)
+{
+    return static_cast<int16_t>(
+        static_cast<uint16_t>(p[0]) |
+        (static_cast<uint16_t>(p[1]) << 8));
+}
+
+static inline uint32_t load_le32(const uint8_t *p)
+{
+    return static_cast<uint32_t>(p[0]) |
+           (static_cast<uint32_t>(p[1]) << 8) |
+           (static_cast<uint32_t>(p[2]) << 16) |
+           (static_cast<uint32_t>(p[3]) << 24);
+}
+
+static size_t unpack_rx_frame_pair(const uint8_t *raw, size_t bytes_read,
+                                   int16_t *left, int16_t *right)
+{
+    if (!raw || !left || !right) return 0;
+
+    using pakt::benchcfg::RxUnpackMode;
+    switch (pakt::benchcfg::kRxUnpackMode) {
+    case RxUnpackMode::Packed16Stereo:
+        if (bytes_read < 4) return 0;
+        *left  = load_le16(raw + 0);
+        *right = load_le16(raw + 2);
+        return 4;
+    case RxUnpackMode::Slot32Low16Stereo:
+        if (bytes_read < 8) return 0;
+        *left  = static_cast<int16_t>(load_le32(raw + 0) & 0xFFFFu);
+        *right = static_cast<int16_t>(load_le32(raw + 4) & 0xFFFFu);
+        return 8;
+    case RxUnpackMode::Slot32High16Stereo:
+        if (bytes_read < 8) return 0;
+        *left  = static_cast<int16_t>((load_le32(raw + 0) >> 16) & 0xFFFFu);
+        *right = static_cast<int16_t>((load_le32(raw + 4) >> 16) & 0xFFFFu);
+        return 8;
+    }
+    return 0;
+}
+
 static int16_t maybe_byteswap_sample(int16_t s)
 {
     if constexpr (!pakt::benchcfg::kRxByteSwapSamples) {
@@ -660,6 +766,24 @@ static void log_sgtl5000_readback(i2c_master_dev_handle_t dev)
                      r.name, r.reg, esp_err_to_name(err));
         }
     }
+}
+
+static i2s_std_slot_config_t make_explicit_i2s_slot_config()
+{
+    i2s_std_slot_config_t cfg = {};
+    cfg.data_bit_width = I2S_DATA_BIT_WIDTH_16BIT;
+    cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_16BIT;
+    cfg.slot_mode = I2S_SLOT_MODE_STEREO;
+    cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    cfg.ws_width = 16;
+    cfg.ws_pol = false;
+    cfg.bit_shift = true;   // Philips/I2S one-bit delay from WS edge
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)
+    cfg.left_align = true;
+    cfg.big_endian = false;
+    cfg.bit_order_lsb = false;
+#endif
+    return cfg;
 }
 
 static void i2c_scan_bus(i2c_master_bus_handle_t bus)
@@ -759,6 +883,13 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev, uint32_t sample_rate_hz)
         return false;
     }
 
+    uint16_t chip_id = 0;
+    if (sgtl5000_read(dev, 0x0000, &chip_id) != ESP_OK) {
+        ESP_LOGE("audio", "Failed to read SGTL5000 CHIP_ID");
+        return false;
+    }
+    ESP_LOGI("audio", "SGTL5000 CHIP_ID = 0x%04X", chip_id);
+
     // 1. Partial analog power-up: VCOAMP (bias) only.
     //    Full power-up in step 8 after digital blocks are configured.
     if (sgtl5000_write(dev, 0x0030, 0x40A0) != ESP_OK) return false;
@@ -776,9 +907,11 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev, uint32_t sample_rate_hz)
     // 5. Linear regulator: default.
     if (sgtl5000_write(dev, 0x0026, 0x006C) != ESP_OK) return false;
 
-    // 6. Digital power: I2S_IN + I2S_OUT + ADC + DAC + DAP all on.
-    //    0x0073 = bit6(ADC)+bit5(DAC)+bit4(DAP)+bit1(I2S_IN)+bit0(I2S_OUT)
-    if (sgtl5000_write(dev, 0x0002, 0x0073) != ESP_OK) return false;
+    // 6. Digital power: I2S_IN + I2S_OUT + ADC + DAC on.
+    //    DAP remains off for debug work so RX/TX use the simplest possible
+    //    digital path through the codec.
+    //    0x0063 = bit6(ADC)+bit5(DAC)+bit1(I2S_IN)+bit0(I2S_OUT)
+    if (sgtl5000_write(dev, 0x0002, 0x0063) != ESP_OK) return false;
 
     // 7. Clock: selected from the build-time audio clock plan.
     if (sgtl5000_write(dev, 0x0004, clock_plan.clk_ctrl_reg) != ESP_OK) return false;
@@ -793,12 +926,9 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev, uint32_t sample_rate_hz)
     if (sgtl5000_write(dev, 0x0006, 0x0030) != ESP_OK) return false;
 
     // 9. Signal routing (CHIP_SSS_CTRL 0x000A).
-    //    Reset value = 0x0010 (PJRC keeps it).  Bit layout:
-    //      [5:4] DAP_SELECT = 01 → I2S_IN feeds DAP (pass-through by default)
-    //      [13:12] DAC_SELECT = 00 → DAP_OUT feeds DAC  (I2S→DAP→DAC→HP ✓)
-    //      [1:0]  I2S_SELECT = 00 → ADC feeds I2S output (ADC→ESP RX path ✓)
-    //    0x0010 = DAP_SELECT=I2S_IN; DAC takes from DAP output.
-    //    (Our previous 0x1000 set bits[13:12]=01 = ADC→DAC, silencing HP output.)
+    //    Route ADC -> I2S out for RX capture, and I2S in -> DAC for TX/monitor.
+    //    This bypasses DAP entirely so the digital audio path is unambiguous.
+    //    0x0010 = DAC_SELECT=I2S_IN, I2S_SELECT=ADC
     if (sgtl5000_write(dev, 0x000A, 0x0010) != ESP_OK) return false;
 
     // 10. ADC/DAC control: HPF active on ADC, no mute on ADC or DAC.
@@ -833,7 +963,7 @@ static bool sgtl5000_init(i2c_master_dev_handle_t dev, uint32_t sample_rate_hz)
     vTaskDelay(pdMS_TO_TICKS(5));
 
     ESP_LOGI("audio",
-             "SGTL5000 init OK: %u Hz, I2S→DAP→DAC→HP, ADC=LINE_IN, %s",
+             "SGTL5000 init OK: %u Hz, I2S→DAC→HP, ADC=LINE_IN, %s",
              static_cast<unsigned>(sample_rate_hz),
              clock_plan.summary);
     return true;
@@ -865,6 +995,13 @@ static float goertzel_power(const int16_t *samples, size_t n, float freq_hz, flo
 static void audio_pipeline_run()
 {
     static constexpr size_t   kDmaFrames     = 256;   // frames per DMA block
+    // IDF 5.x i2s_channel_read returns a minimum of one full ring-buffer item whose
+    // size equals dma_frame_num × slot_byte_size.  For Packed16Stereo that is
+    // 256 × 4 = 1024 B, but in practice IDF 5.5.x batches TWO descriptors before
+    // signalling the ring buffer, returning 2048 B (512 Packed16 stereo frames)
+    // regardless of the requested byte count.  Size mono_buf for the worst case
+    // (2× kDmaFrames) so the unpack loop drains every byte IDF returns.
+    static constexpr size_t   kMaxMonoFrames = kDmaFrames * 2; // 512
     const uint32_t kSampleRateHz = kAudioSampleRateHz;
     AudioClockPlan clock_plan{};
     if (!make_audio_clock_plan(kSampleRateHz, &clock_plan)) {
@@ -926,8 +1063,7 @@ static void audio_pipeline_run()
         i2s_std_config_t cfg      = {};
         cfg.clk_cfg               = I2S_STD_CLK_DEFAULT_CONFIG(kSampleRateHz);
         cfg.clk_cfg.mclk_multiple = clock_plan.mclk_multiple;
-        cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
-            I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+        cfg.slot_cfg = make_explicit_i2s_slot_config();
         cfg.gpio_cfg.mclk = GPIO_NUM_14;
         cfg.gpio_cfg.bclk = GPIO_NUM_8;
         cfg.gpio_cfg.ws   = GPIO_NUM_15;
@@ -1016,13 +1152,14 @@ static void audio_pipeline_run()
             }
         });
 
-    static int16_t rx_buf[kDmaFrames * 2];
-    static int16_t mono_buf[kDmaFrames];
+    static uint8_t rx_raw_buf[kDmaFrames * 8];
+    static int16_t mono_buf[kMaxMonoFrames];  // sized for 2-descriptor IDF batch
 
     ESP_LOGI("audio", "RX pipeline running: SGTL5000 + AfskDemodulator @ %u Hz",
              static_cast<unsigned>(kSampleRateHz));
     ESP_LOGI("audio",
-             "RX sample path: mode=%s swap_slots=%s byte_swap=%s dc_block=%s pole=%.3f",
+             "RX sample path: unpack=%s mode=%s swap_slots=%s byte_swap=%s dc_block=%s pole=%.3f",
+             rx_unpack_mode_name(),
              rx_input_mode_name(),
              pakt::benchcfg::kRxSwapStereoSlots ? "yes" : "no",
              pakt::benchcfg::kRxByteSwapSamples ? "yes" : "no",
@@ -1051,7 +1188,6 @@ static void audio_pipeline_run()
     // Full RX recorder state — captures the actual mono demod input for offline analysis.
     size_t rx_record_pos        = 0;
     bool   rx_record_collecting = false;
-    bool   rx_record_dumped     = false;
     bool   auto_record_armed    = false;
     const int64_t auto_record_arm_us =
         esp_timer_get_time() +
@@ -1061,8 +1197,12 @@ static void audio_pipeline_run()
     uint8_t applied_gain = 0;
 
     for (;;) {
+        // Auto-arming the recorder from audio_task is only safe when aprs_task
+        // is not also running the Stage C bench flow. Otherwise both tasks can
+        // arm/dump the same capture and corrupt the serial export.
         if constexpr (pakt::benchcfg::kEnableAprsStageCRxRecord &&
-                      pakt::benchcfg::kAutoStartRxRecorderOnBoot) {
+                      pakt::benchcfg::kAutoStartRxRecorderOnBoot &&
+                      !pakt::benchcfg::kEnableAprsBench) {
             if (!auto_record_armed &&
                 !g_rx_record_active.load(std::memory_order_relaxed) &&
                 !g_rx_record_valid.load(std::memory_order_relaxed) &&
@@ -1079,40 +1219,58 @@ static void audio_pipeline_run()
                          static_cast<double>(pakt::benchcfg::kAprsStageCRecordAdcGainDb),
                          static_cast<unsigned>(kRxRecordSampleRateHz));
             }
-            if (auto_record_armed &&
-                !rx_record_dumped &&
-                g_rx_record_valid.load(std::memory_order_acquire)) {
-                dump_rx_record_wav_base64(nullptr);
-                rx_record_dumped = true;
-            }
         }
 
         size_t bytes_read = 0;
-        esp_err_t err = i2s_channel_read(rx_chan, rx_buf, sizeof(rx_buf),
+        esp_err_t err = i2s_channel_read(rx_chan, rx_raw_buf, sizeof(rx_raw_buf),
                                          &bytes_read, pdMS_TO_TICKS(50));
+        // One-shot log: bytes_read tells us how many bytes IDF returned.
+        // Packed16Stereo one-descriptor ideal = kDmaFrames*4 = 1024 B.
+        // IDF 5.5.x observed: returns 2048 B (two descriptors) regardless of
+        // request size.  kMaxMonoFrames=512 absorbs both; samp/s will be correct.
+        {
+            static bool s_i2s_fmt_logged = false;
+            if (!s_i2s_fmt_logged) {
+                s_i2s_fmt_logged = true;
+                ESP_LOGI("audio",
+                         "I2S read: bytes_read=%u mono_frames=%u"
+                         " (Packed16 1-desc=%u 2-desc=%u; all processed)",
+                         static_cast<unsigned>(bytes_read),
+                         static_cast<unsigned>(bytes_read / 4),
+                         static_cast<unsigned>(kDmaFrames * 4),
+                         static_cast<unsigned>(kDmaFrames * 8));
+            }
+        }
         if (err == ESP_OK && bytes_read > 0) {
-            const size_t stereo_samples = bytes_read / sizeof(int16_t);
-            const size_t frames = stereo_samples / 2;
+            size_t frames = 0;
 
             // Select the configured RX input view from the stereo I2S frame,
             // then feed that conditioned mono stream into the recorder/demod.
-            for (size_t i = 0; i < frames; ++i) {
-                int16_t left  = rx_buf[i * 2];
-                int16_t right = rx_buf[i * 2 + 1];
+            for (size_t offset = 0; offset < bytes_read && frames < kMaxMonoFrames; ) {
+                int16_t left = 0;
+                int16_t right = 0;
+                const size_t consumed =
+                    unpack_rx_frame_pair(rx_raw_buf + offset, bytes_read - offset,
+                                         &left, &right);
+                if (consumed == 0) break;
+                offset += consumed;
                 if constexpr (pakt::benchcfg::kRxSwapStereoSlots) {
                     const int16_t tmp = left;
                     left = right;
                     right = tmp;
                 }
-                mono_buf[i] = dc_block_sample(
+                mono_buf[frames] = dc_block_sample(
                     select_rx_sample(left, right,
                                      &rx_left_abs_sum, &rx_right_abs_sum,
                                      &rx_left_peak, &rx_right_peak));
-                const int32_t a = mono_buf[i] >= 0 ? mono_buf[i] : -mono_buf[i];
+                const int32_t a =
+                    mono_buf[frames] >= 0 ? mono_buf[frames] : -mono_buf[frames];
                 if (a > rx_window_peak)  rx_window_peak = a;
                 rx_window_abs_sum += static_cast<uint32_t>(a);
                 if (a > kClipThresh)     ++rx_window_clips;
+                ++frames;
             }
+            if (frames == 0) continue;
             rx_window_samples += static_cast<uint32_t>(frames);
 
             // PCM snapshot: wait for a clear signal event (peak > 5000) before capturing.
@@ -1201,7 +1359,8 @@ static void audio_pipeline_run()
                     }
                 }
 
-                if constexpr (pakt::benchcfg::kRxLogChannelStats) {
+                if constexpr (pakt::benchcfg::kRxLogChannelStats &&
+                              !pakt::benchcfg::kQuietCaptureMode) {
                     ESP_LOGI("audio",
                              "RX channel stats: L(mean=%u peak=%d) R(mean=%u peak=%d) mono(mean=%u peak=%d clips=%u)",
                              rx_window_samples ? (rx_left_abs_sum / rx_window_samples) : 0u,
@@ -1213,10 +1372,12 @@ static void audio_pipeline_run()
                              rx_window_clips);
                 }
 
-                ESP_LOGI("audio",
-                         "TONE eng: 1200Hz=%.5f 2200Hz=%.5f  (AFSK likely present if either > 0.002)",
-                         static_cast<double>(max_g1200),
-                         static_cast<double>(max_g2200));
+                if constexpr (!pakt::benchcfg::kQuietCaptureMode) {
+                    ESP_LOGI("audio",
+                             "TONE eng: 1200Hz=%.5f 2200Hz=%.5f  (AFSK likely present if either > 0.002)",
+                             static_cast<double>(max_g1200),
+                             static_cast<double>(max_g2200));
+                }
 
                 rx_window_peak    = 0;
                 rx_window_abs_sum = 0;
@@ -1910,11 +2071,33 @@ static void aprs_task(void *arg)
                 ESP_LOGI("aprs_bench", "  ADC gain   : +%.1f dB (step=%u)",
                          kStageCRecordGainDb,
                          static_cast<unsigned>(pakt::benchcfg::kAprsStageCRecordAdcGainStep));
-                ESP_LOGI("aprs_bench", "  Operator: send APRS packets during this 30 s window.");
-                ESP_LOGI("aprs_bench", "  Export: serial will emit a base64 WAV after capture.");
+                if constexpr (pakt::benchcfg::kAprsStageCPreRollSeconds > 0) {
+                    ESP_LOGI("aprs_bench",
+                             "  Pre-roll   : %u s countdown before recording starts.",
+                             static_cast<unsigned>(pakt::benchcfg::kAprsStageCPreRollSeconds));
+                }
+                ESP_LOGI("aprs_bench", "  Operator: send APRS packets during the recording window.");
+                if constexpr (pakt::benchcfg::kExportBinaryChunks) {
+                    ESP_LOGI("aprs_bench", "  Export: serial will emit a framed binary WAV after capture.");
+                } else {
+                    ESP_LOGI("aprs_bench", "  Export: serial will emit a base64 WAV after capture.");
+                }
 
-                g_radio->set_squelch(0);
-                g_radio->set_volume(8);
+                {
+                    const bool sq_ok  = g_radio->set_squelch(0);
+                    const bool vol_ok = g_radio->set_volume(
+                        pakt::benchcfg::kAprsStageCVolume);
+                    ESP_LOGI("aprs_bench",
+                             "  Stage C squelch=0: %s  volume=%u: %s",
+                             sq_ok  ? "OK" : "FAIL — SA818 UART timeout; squelch stays at 1",
+                             static_cast<unsigned>(pakt::benchcfg::kAprsStageCVolume),
+                             vol_ok ? "OK" : "FAIL");
+                    if (!sq_ok) {
+                        ESP_LOGW("aprs_bench",
+                                 "  WARNING: squelch open failed. SA818 AF_OUT will be muted"
+                                 " unless an external signal breaks squelch=1.");
+                    }
+                }
                 g_adc_gain_req.store(pakt::benchcfg::kAprsStageCRecordAdcGainStep,
                                      std::memory_order_relaxed);
                 vTaskDelay(pdMS_TO_TICKS(2000));
@@ -1922,36 +2105,72 @@ static void aprs_task(void *arg)
                     static_cast<uint32_t>(esp_timer_get_time() / 1000));
                 g_rx_record_valid.store(false, std::memory_order_relaxed);
                 g_rx_record_samples.store(0, std::memory_order_relaxed);
+
+                if constexpr (pakt::benchcfg::kAprsStageCPreRollSeconds > 0) {
+                    ESP_LOGI("aprs_bench",
+                             "  >>> GET READY — recording starts in %u seconds.",
+                             static_cast<unsigned>(pakt::benchcfg::kAprsStageCPreRollSeconds));
+                    for (uint32_t remain = pakt::benchcfg::kAprsStageCPreRollSeconds; remain > 0; --remain) {
+                        if (remain == pakt::benchcfg::kAprsStageCPreRollSeconds ||
+                            remain <= 5 || (remain % 10) == 0) {
+                            ESP_LOGI("aprs_bench",
+                                     "  >>> Recording starts in %u s",
+                                     static_cast<unsigned>(remain));
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                    }
+                }
+
+                ESP_LOGI("aprs_bench", "  >>> RECORDING ACTIVE NOW — SEND APRS.");
                 g_rx_record_arm.store(true, std::memory_order_release);
 
                 for (uint32_t s = 0; s < kRxRecordSeconds; ++s) {
-                    if (s == 0) {
+                    if constexpr (!pakt::benchcfg::kQuietCaptureMode) {
+                        if (s == 0) {
+                            ESP_LOGI("aprs_bench",
+                                     "  >>> SEND APRS NOW — 3-5 packets across this window.");
+                        } else if (s % 10 == 0) {
+                            ESP_LOGI("aprs_bench",
+                                     "  >>> Continue sending APRS packets (%u/%u s).",
+                                     static_cast<unsigned>(s),
+                                     static_cast<unsigned>(kRxRecordSeconds));
+                        }
+                    } else if (s == 0) {
                         ESP_LOGI("aprs_bench",
-                                 "  >>> SEND APRS NOW — 3-5 packets across this window.");
-                    } else if (s % 10 == 0) {
-                        ESP_LOGI("aprs_bench",
-                                 "  >>> Continue sending APRS packets (%u/%u s).",
-                                 static_cast<unsigned>(s),
-                                 static_cast<unsigned>(kRxRecordSeconds));
+                                 "  >>> QUIET CAPTURE ACTIVE — SEND APRS NOW.");
                     }
                     vTaskDelay(pdMS_TO_TICKS(1000));
-                    watchdog.heartbeat(
-                        static_cast<uint32_t>(esp_timer_get_time() / 1000));
+                    if constexpr (pakt::benchcfg::kStartWatchdogTask) {
+                        watchdog.heartbeat(
+                            static_cast<uint32_t>(esp_timer_get_time() / 1000));
+                    }
 
-                    const size_t samples =
-                        g_rx_record_samples.load(std::memory_order_relaxed);
-                    const int32_t peak =
-                        g_rx_peak_abs.load(std::memory_order_relaxed);
-                    const uint32_t mean_abs =
-                        g_rx_mean_abs.load(std::memory_order_relaxed);
-                    ESP_LOGI("aprs_bench",
-                             "  [rec %2us/%us] samples=%-6u peak=%-6" PRId32
-                             " mean=%-5" PRIu32 " active=%s",
-                             static_cast<unsigned>(s + 1),
-                             static_cast<unsigned>(kRxRecordSeconds),
-                             static_cast<unsigned>(samples),
-                             peak, mean_abs,
-                             g_rx_record_active.load(std::memory_order_acquire) ? "yes" : "no");
+                    // Per-second signal+demod log: printed during recording (before export),
+                    // so it does not interfere with the binary chunk stream.
+                    // In quiet mode, peak/flags/fcs_rejects tell us whether signal is present
+                    // and whether the demodulator is seeing AFSK activity — without this,
+                    // there is no way to diagnose a silent squelch or a gain problem.
+                    {
+                        const size_t samples =
+                            g_rx_record_samples.load(std::memory_order_relaxed);
+                        const int32_t peak =
+                            g_rx_peak_abs.load(std::memory_order_relaxed);
+                        const uint32_t mean_abs =
+                            g_rx_mean_abs.load(std::memory_order_relaxed);
+                        const uint32_t flags =
+                            g_demod_flags.load(std::memory_order_relaxed);
+                        const uint32_t fcs_rej =
+                            g_demod_fcs_rejects.load(std::memory_order_relaxed);
+                        ESP_LOGI("aprs_bench",
+                                 "  [rec %2us/%us] peak=%-6" PRId32
+                                 " mean=%-5" PRIu32
+                                 " flags=%" PRIu32 " fcs_rej=%" PRIu32
+                                 " samp=%u",
+                                 static_cast<unsigned>(s + 1),
+                                 static_cast<unsigned>(kRxRecordSeconds),
+                                 peak, mean_abs, flags, fcs_rej,
+                                 static_cast<unsigned>(samples));
+                    }
                 }
 
                 g_radio->set_squelch(1);
@@ -1964,7 +2183,7 @@ static void aprs_task(void *arg)
                 }
 
                 if (g_rx_record_valid.load(std::memory_order_acquire)) {
-                    dump_rx_record_wav_base64(&watchdog);
+                    dump_rx_record_wav(&watchdog);
                 } else {
                     ESP_LOGW("aprs_bench",
                              "  Full RX recording unavailable — capture did not complete.");

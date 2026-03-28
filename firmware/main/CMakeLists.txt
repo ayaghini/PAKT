@@ -9,3 +9,7 @@ idf_component_register(
         "sa818_bench_test"
     REQUIRES pakt_hal ax25 aprs modem ble_services aprs_fsm payload_codec telemetry capability gps safety_watchdog radio_sa818 kiss nvs_flash esp_system esp_timer esp_psram freertos driver
 )
+
+if(PAKT_PROFILE_QUIET_CODEC_CAPTURE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE PAKT_BENCH_PROFILE_QUIET_CODEC_CAPTURE=1)
+endif()
