@@ -28,6 +28,10 @@ Recent bench work materially improved the RF picture:
   captures with a countdown and framed binary export suitable for handoff analysis
 - on-device APRS RX is now proven on hardware after fixing a half-rate I2S capture bug
   and reducing Stage C SA818 receive volume; the prototype now decodes APRS frames on-device
+- the APRS message-ack path is now wired into `TxScheduler`, so on-air APRS acks
+  can complete the firmware message FSM instead of always timing out
+- the GPS UART path is now live in firmware on `UART2` (`GPIO17/GPIO18`, `38400` baud),
+  though physical wiring/fix validation is still pending on hardware
 
 The project is not MVP-complete yet because hardware validation still gates the milestone:
 - BLE security and PTT fail-safe validation on hardware
@@ -49,11 +53,14 @@ The project is not MVP-complete yet because hardware validation still gates the 
 ## Progress Summary
 - Software stack is largely implemented and test-backed.
 - Prototype hardware can boot the codec/radio path, recover SA818 control, transmit APRS packets over RF, and now decode APRS on-device.
+- Main firmware is now in production mode by default: recorder/export bench stages are disabled on boot while the continuous APRS RX path remains active.
 - Demodulator instrumentation now exposes RX peak, flag, FCS-reject, and decode counters during bench work.
 - Bench stages are now selectable through [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h), so debug sessions can run only the needed benches/stages instead of the full boot-time sequence.
 - Full RX recorder/export now works through PSRAM-backed WAV capture, and the quiet profile can export captured demod-input audio through a framed binary serial stream for offline reconstruction.
 - A real RX blocker was found and fixed: the audio pipeline was unpacking only half of each 2048-byte I2S read, effectively feeding the demodulator at `8 kHz` while configured for `16 kHz`.
 - After fixing that bug and lowering quiet-profile Stage C SA818 volume from `8` to `4`, the device decoded multiple on-air APRS frames in the same `30 s` window.
+- GPS parsing is no longer a stub: `gps_task` now drives a real UART/NMEA path in firmware, pending hardware confirmation of the M9N UART wiring.
+- APRS ack handling is no longer a dead end: received APRS acks can now call `ctx.notify_ack()` and complete the message FSM in firmware.
 - The RX path is now also configurable at the firmware level for:
   - `8 kHz` or `16 kHz` audio rate
   - left/right/average/stronger channel selection
@@ -67,11 +74,10 @@ The project is not MVP-complete yet because hardware validation still gates the 
   - on-device APRS RX now proven on the corrected quiet profile
 
 ## Immediate Next Steps
-1. Measure and record SA818 TX deviation under the actual `LINE_OUT -> AF_IN` attenuation network.
-2. Preserve the corrected quiet-profile RX settings as the new known-good baseline:
-   `16 kHz`, full 512-frame unpack, Stage C SA818 volume `4`, low ADC gain.
-3. Validate repeatability of on-device APRS RX decode across multiple runs and source radios.
-4. Resume BLE bonded-write and PTT fail-safe validation on live hardware now that the core RF TX/RX path is working.
+1. Validate BLE encrypted+bonded write enforcement and PTT fail-safe behavior on live hardware.
+2. Verify the newly wired APRS ack path end-to-end with real on-air message acknowledgements.
+3. Verify the live GPS UART path against the connected M9N hardware and confirm BLE GPS telemetry.
+4. Validate native BLE + KISS-over-BLE behavior on hardware, including reconnect and at least one real client path.
 
 ## Bench Profile
 - Bench/debug stage selection is controlled in [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h).

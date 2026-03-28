@@ -65,6 +65,8 @@ The bootstrap pack includes:
 - RX diagnosis status: the earlier SGTL5000 / I2S / sample-capture investigation led to a real firmware fix. The current receive-side focus is no longer first-principles RX proof, but repeatability, margin, calibration, and integration into the main firmware path.
 - Bench workflow status: blocking bench stages are now selectable through `firmware/main/bench_profile_config.h`, so prototype debug runs can be narrowed to only the needed stages.
 - Interop: KISS-over-BLE is part of MVP and is software-complete enough for hardware validation; third-party client evidence is still pending.
+- APRS message ack handling is now wired into the firmware TX state machine; end-to-end on-air ack validation is still pending.
+- GPS UART integration is now live in firmware on `UART2` (`GPIO17/GPIO18`, `38400` baud), but hardware wiring/fix validation is still pending.
 
 ## Documentation split
 - `docs/aprs_mvp_docs/` is the canonical spec, architecture, protocol, and project-status tree.
@@ -86,7 +88,7 @@ The bootstrap pack includes:
 - MVP gate: open
 - Strongest validated RF result so far: APRS TX is proven externally and APRS RX is now proven on-device on the current prototype
 - Most important remaining RF work: repeatability, deviation calibration, and end-to-end validation on the corrected firmware baseline
-- Main next verification step: validate repeatable APRS RX/TX behavior on the main firmware and continue BLE/KISS and safety validation on live hardware
+- Main next verification step: continue MVP hardware validation above the now-working RF stack: BLE/KISS behavior, APRS ack round-trip, GPS UART validation, and safety checks
 
 ## What this is / is not
 - A practical starting point for hardware + firmware implementation

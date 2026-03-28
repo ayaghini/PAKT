@@ -19,9 +19,9 @@ Legend:
 | Host unit tests pass in CI | **pass** | `host-tests` CI job: CMake+Ninja, 364/364 tests pass. AFSK round-trip fixed (pass 3): ones_count 6→7, biquad Q 3.5→1.5. TX buffer sizing tests added (pass 4–5): 6 new tests; `modulate_frame()` truncation signaling corrected (pass 5): inline before-write check correctly distinguishes truncation from exact-fit success. |
 | Python app tests pass in CI | **pass** | `app-tests` CI job: pytest, test_chunker + test_app + test_messaging + test_telemetry_app |
 | No new critical warnings in touched modules | **pass** | `-Wall -Wextra -Wpedantic` in host tests; ESP-IDF build clean |
-| Firmware flashes and boots on target | **blocked** | Dependency: prototype hardware (ESP32-S3 board) not yet available |
+| Firmware flashes and boots on target | **pass** | Repeatedly flashed and booted successfully on the current ESP32-S3 prototype during the 2026-03-21 through 2026-03-27 hardware sessions. |
 
-**G0 assessment:** All software checks pass. Host test binary status recorded here is 364/364 after the pass 5 `AfskModulator` truncation fix. Hardware flash/boot check remains blocked pending prototype.
+**G0 assessment:** All software checks pass, and firmware flash/boot on the current prototype is now repeatedly verified. Host test binary status recorded here is 364/364 after the pass 5 `AfskModulator` truncation fix.
 
 ---
 
