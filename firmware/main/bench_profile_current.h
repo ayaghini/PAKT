@@ -1,6 +1,9 @@
 // bench_profile_current.h
 //
-// Default working bench/debug profile currently used for APRS RX investigation.
+// Default firmware profile: all tasks live, APRS bench preamble enabled,
+// all bench stages (TX burst / RX sweep / recorder) disabled.
+// The AFSK demodulator runs continuously; decoded frames reach BLE clients
+// via both native rx_packet notify and KISS RX notify.
 
 #pragma once
 
@@ -47,8 +50,8 @@ inline constexpr bool kEnableAprsStage0Loopback    = false;
 inline constexpr bool kEnableAprsStageATxBurst     = false;
 inline constexpr bool kEnableAprsStageBRxGainSweep = false;
 inline constexpr bool kEnableAprsStageBPcmSnapshot = false;
-inline constexpr bool kEnableAprsStageCRxRecord    = true;
-inline constexpr bool kAutoStartRxRecorderOnBoot   = true;
+inline constexpr bool kEnableAprsStageCRxRecord    = false;
+inline constexpr bool kAutoStartRxRecorderOnBoot   = false;
 inline constexpr uint32_t kAutoStartRxRecorderDelayMs = 4000;
 inline constexpr uint32_t kAprsStageCPreRollSeconds = 0;
 

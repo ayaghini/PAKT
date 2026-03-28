@@ -1,6 +1,6 @@
 # APRS 2m Pocket TNC + Tracker (SA818 + ESP32-S3 + GPS) - MVP Docs
 
-Last updated: 2026-03-20
+Last updated: 2026-03-27
 
 This folder contains the working documentation set for a standalone APRS
 (1200 baud AFSK, AX.25) 2m device that exposes BLE interfaces to desktop and phone clients,
@@ -61,8 +61,8 @@ The bootstrap pack includes:
 - Software: most MVP software paths are implemented, including native BLE, KISS-over-BLE, AX.25/APRS framing, AFSK modem, APRS TX scheduling, telemetry payloads, desktop BLE tooling, and KISS bridge support.
 - Contracts: `payload_contracts.md` is the canonical JSON schema source for BLE payloads.
 - Hardware: bench bring-up and RF/electrical validation remain the main gating steps.
-- RF status: short APRS packet TX has now been bench-proven on a separate receiver; on-device APRS RX is still open.
-- RX diagnosis status: current bench evidence shows the receive analog path is alive, instrumented, and now recordable via PSRAM-backed `16-bit` WAV export at both `8 kHz` and `16 kHz`. Scope captures and saved WAVs still disagree, so the current strongest suspicion is in the SGTL5000 / I2S / sample-capture path rather than gross analog line failure alone.
+- RF status: APRS packet TX is bench-proven on the current prototype, and on-device APRS RX is now also proven on hardware after fixing the half-rate I2S capture bug in the RX path.
+- RX diagnosis status: the earlier SGTL5000 / I2S / sample-capture investigation led to a real firmware fix. The current receive-side focus is no longer first-principles RX proof, but repeatability, margin, calibration, and integration into the main firmware path.
 - Bench workflow status: blocking bench stages are now selectable through `firmware/main/bench_profile_config.h`, so prototype debug runs can be narrowed to only the needed stages.
 - Interop: KISS-over-BLE is part of MVP and is software-complete enough for hardware validation; third-party client evidence is still pending.
 
@@ -84,9 +84,9 @@ The bootstrap pack includes:
 
 ## Current status at a glance
 - MVP gate: open
-- Strongest validated RF result so far: external APRS packet reception from the prototype TX path
-- Most important missing RF result: on-device APRS RX decode
-- Main next verification step: close the SGTL5000/I2S/sample-capture mismatch using the new `16 kHz` recorder and scope-guided comparison, then return to on-device APRS RX decode proof
+- Strongest validated RF result so far: APRS TX is proven externally and APRS RX is now proven on-device on the current prototype
+- Most important remaining RF work: repeatability, deviation calibration, and end-to-end validation on the corrected firmware baseline
+- Main next verification step: validate repeatable APRS RX/TX behavior on the main firmware and continue BLE/KISS and safety validation on live hardware
 
 ## What this is / is not
 - A practical starting point for hardware + firmware implementation

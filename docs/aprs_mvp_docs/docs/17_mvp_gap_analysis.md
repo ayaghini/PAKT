@@ -1,6 +1,6 @@
 # MVP Gap Analysis — Firmware, Protocols, and KISS TNC
 
-Date: 2026-03-20
+Date: 2026-03-27
 Purpose: make the remaining implementation gaps explicit so an agent can begin work immediately.
 
 ## 1. Scope
@@ -54,13 +54,12 @@ The project is therefore not MVP-complete until:
 - schema exists
 - `power_task` is still stubbed
 
-8. **Audio modem path still needs hardware closure**
+8. **Audio modem path now has hardware proof, but margin/integration work remains**
 - I2S/codec driver is wired
-- short APRS packet TX is now bench-proven on a separate receiver
-- receive-side analog path is active and now has bench instrumentation for peak/flag/FCS/decode counters
-- a PSRAM-backed RX WAV export path now exists for offline analysis, bench stages are now selectable through `firmware/main/bench_profile_config.h`, and the firmware now supports `16 kHz` codec/I2S debug mode plus configurable RX sample interpretation
-- scope captures from the analog RX nodes and the saved WAV captures do not yet agree; current debug focus has shifted toward SGTL5000 input/gain assumptions, I2S RX interpretation, and sample-conditioning fidelity
-- SGTL5000 capture-path closure, trusted Bell 202 source validation, and final on-device APRS RX proof remain gating work
+- APRS packet TX is now bench-proven on the current prototype
+- on-device APRS RX is now also proven on hardware after fixing a real half-rate I2S RX unpack bug and reducing receive volume to avoid clipping during the quiet-profile capture workflow
+- receive-side instrumentation now includes peak/flag/FCS/decode counters, PSRAM-backed WAV export, selectable bench stages, `16 kHz` capture mode, and configurable RX sample interpretation
+- remaining work is no longer first RX proof; it is repeatability, margin tuning, calibration, and clean integration of the corrected RX path into the normal firmware workflow
 
 ## 3. Protocol gaps
 
@@ -112,10 +111,10 @@ Hardware-gated remaining items:
 - end-to-end KISS validation with a reference client (APRSdroid, YAAC, Xastir, Direwolf)
 - BLE security validation on physical hardware
 - SA818 + SGTL5000 electrical/audio validation under real RF conditions
-- trusted Bell 202 source confirmation into the prototype RX path
-- closure of the current SGTL5000/I2S/sample-capture mismatch seen between scope and saved WAVs
-- on-device APRS RX decode proof
-- final confirmation that the new `16-bit` Stage C recorder captures clean Bell 202 at the demod input
+- controlled-condition APRS RX repeatability and margin validation
+- TX deviation calibration and documented known-good audio settings
+- clean hardware validation of the main/default firmware path beyond the quiet-profile debug workflow
+- final BLE/KISS/client validation on top of the now-working RF path
 
 ## 6. Agent-ready next tasks
 

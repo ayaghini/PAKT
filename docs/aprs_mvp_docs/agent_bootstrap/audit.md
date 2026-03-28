@@ -5,6 +5,64 @@ Purpose: rolling implementation and verification ledger for the current MVP bran
 
 ---
 
+## MVP workstream advance — main firmware production mode + ack path + GPS UART (2026-03-27)
+
+Status: code-complete; hardware validation pending.
+
+Summary of changes in this session:
+
+### firmware/main/main.cpp
+
+**APRS ack detection wired (previously missing link):**
+- `aprs_task` RX drain loop now decodes each received AX.25 frame once and reuses
+  the result for TNC2 logging, ack detection, and BLE forwarding.
+- For each decoded frame whose APRS info field is a message ack addressed to this
+  station (format `:ADDRESSEE:ack<msg_id>`), `ctx.notify_ack(msg_id)` is called.
+- This closes the send/ack/timeout FSM path: firmware now forwards on-air acks into
+  `TxScheduler::on_ack_received()` → BLE `tx_result` notify with `"status":"acked"`.
+- Previously `notify_ack()` was never called from `aprs_task`; messages always
+  timed out regardless of whether a real ack was received.
+- Stale comment "Until the audio pipeline is wired this queue is always empty" removed.
+
+**GPS UART driver wired (FW-005 stub replaced):**
+- `gps_task` now initialises UART2 on GPIO17 (TX→M9N RXD) / GPIO18 (M9N TXD→ESP RX)
+  at 38400 baud (NEO-M9N factory default).
+- Drains UART2 RX FIFO each 100 ms tick and feeds bytes into `NmeaParser::feed()`.
+- If the M9N UART isn't physically wired, `uart_read_bytes` returns 0 — safe no-op.
+- GPS telemetry publishes via `BleServer::notify_gps()` at 1 Hz when fix is valid.
+
+**Main firmware mode:**
+- `bench_profile_current.h` now has all bench stages disabled
+  (`kEnableAprsStageCRxRecord = false`, `kAutoStartRxRecorderOnBoot = false`).
+- AFSK demodulator runs continuously in `audio_task`; decoded frames queue to
+  `g_rx_ax25_queue` and flow to BLE clients every `aprs_task` tick (1 s).
+
+### firmware/main/bench_profile_current.h
+
+- Header comment updated to describe the profile as the normal production mode
+  (not "APRS RX investigation").
+
+### Code-inspection findings (no changes needed):
+
+- **TX result wire format confirmed:** `TxResultEncoder::encode()` emits
+  `{"msg_id":"...","status":"..."}` exactly matching Python `MessageTracker.on_tx_result()`.
+  Status values `tx/acked/timeout/cancelled/error` all consistent.
+- **BLE security confirmed:** all write endpoints enforce `sec_state.encrypted &&
+  sec_state.bonded`; return `BLE_ATT_ERR_INSUFFICIENT_AUTHEN` on unprotected links.
+  LE SC configured: `sm_sc=1`, `sm_bonding=1`, `sm_io_cap=BLE_SM_IO_CAP_NO_IO`.
+- **PTT safety confirmed:** `ptt_safe_off()` registered before SA818 init; upgraded
+  after init. `afsk_tx_frame()` always de-asserts PTT including I2S-error paths.
+  Watchdog heartbeat called in all loops and main run loop.
+- **KISS coexist confirmed in code:** `gatt_svcs[]` contains both native APRS/Telemetry
+  services and the KISS service. Disconnect handler resets all three chunkers.
+  Non-modal operation: both native and KISS clients receive every decoded frame.
+- **Power telemetry (MAX17048):** `power_task` remains a stub. Wiring requires sharing
+  the I2C bus handle from `audio_task`. Deferred — hardware validation takes priority.
+
+Build status: clean (`pakt_firmware.bin` produced, 37% flash free).
+
+---
+
 ## SA818 recovery + TX re-validation (2026-03-21)
 
 Status: hardware tested during the current working session.

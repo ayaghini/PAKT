@@ -2257,22 +2257,73 @@ static void aprs_task(void *arg)
         ctx.tick(now_ms);
         watchdog.heartbeat(now_ms);   // signal aprs_task is alive
 
-        // Drain decoded AX.25 frames pushed by audio_task and forward to BLE clients.
-        // Producer call site: audio_task's TODO comment above (FW-004 + FW-006).
-        // Until the audio pipeline is wired this queue is always empty (safe no-op).
+        // Drain decoded AX.25 frames from the audio pipeline (AfskDemodulator →
+        // Ax25RxQueue) and forward to all BLE clients.
+        // audio_task is the SPSC producer; aprs_task is the single consumer.
         {
             uint8_t ax25_frame[pakt::kKissMaxFrame];
             size_t  ax25_len = 0;
             while (g_rx_ax25_queue.pop(ax25_frame, &ax25_len)) {
-                // Log every decoded packet as TNC2 for serial bench monitoring.
+                // Decode once; result is used for TNC2 logging, ack detection,
+                // and BLE forwarding below.
+                pakt::ax25::Frame rx_frame;
+                const bool decoded =
+                    pakt::ax25::decode(ax25_frame, ax25_len, rx_frame);
+
+                // Log as TNC2 for serial bench monitoring.
                 {
-                    pakt::ax25::Frame rx_frame;
                     char tnc2_log[256] = "<decode failed>";
-                    if (pakt::ax25::decode(ax25_frame, ax25_len, rx_frame)) {
+                    if (decoded) {
                         pakt::ax25::to_tnc2(rx_frame, tnc2_log, sizeof(tnc2_log));
                     }
                     ESP_LOGI("aprs", "RX packet: %s  (%u bytes)",
                              tnc2_log, static_cast<unsigned>(ax25_len));
+                }
+
+                // ── APRS message-ack detection ────────────────────────────────
+                // APRS ack format (APRS 1.01 §5.8):
+                //   ':ADDRESSEE:ack<msg_id>'
+                //   where ADDRESSEE is space-padded to exactly 9 chars.
+                // When an ack addressed to this station is received, feed it into
+                // TxScheduler so pending messages transition to ACKED state and
+                // BLE tx_result notify fires ({"msg_id":"...","status":"acked"}).
+                if (decoded && rx_frame.info_len >= 14 &&
+                    static_cast<char>(rx_frame.info[0]) == ':') {
+                    // Extract and right-trim the 9-char addressee field.
+                    char addressee[10];
+                    std::memcpy(addressee, rx_frame.info + 1, 9);
+                    addressee[9] = '\0';
+                    for (int k = 8; k >= 0 && addressee[k] == ' '; --k)
+                        addressee[k] = '\0';
+
+                    // Build this station's identifier (CALLSIGN or CALLSIGN-N).
+                    // Actual max: 6 + '-' + 2 + null = 10 B; use 20 so the
+                    // compiler's uint8_t-range format-truncation analysis is met.
+                    const auto &cfg = g_device_config.config();
+                    char our_id[20];
+                    if (cfg.ssid == 0) {
+                        snprintf(our_id, sizeof(our_id), "%s", cfg.callsign);
+                    } else {
+                        snprintf(our_id, sizeof(our_id), "%s-%u",
+                                 cfg.callsign, static_cast<unsigned>(cfg.ssid));
+                    }
+
+                    // Check: addressed to us AND is an ack (not a normal message).
+                    if (strncmp(addressee, our_id, sizeof(our_id) - 1) == 0 &&
+                        static_cast<char>(rx_frame.info[10]) == ':' &&
+                        static_cast<char>(rx_frame.info[11]) == 'a' &&
+                        static_cast<char>(rx_frame.info[12]) == 'c' &&
+                        static_cast<char>(rx_frame.info[13]) == 'k') {
+                        // info[14..] is the msg_id (APRS spec: 1–5 numeric chars).
+                        const size_t id_len = rx_frame.info_len - 14;
+                        if (id_len >= 1 && id_len <= 5) {
+                            char ack_id[6];
+                            std::memcpy(ack_id, rx_frame.info + 14, id_len);
+                            ack_id[id_len] = '\0';
+                            ESP_LOGI("aprs", "RX: APRS ack for msg_id=%s", ack_id);
+                            ctx.notify_ack(ack_id);
+                        }
+                    }
                 }
 
                 // 1. Native rx_packet notify (PAKT BLE clients, e.g. desktop app)
@@ -2320,17 +2371,58 @@ static void gps_task(void *arg)
 {
     // Step 5: NMEA parser + stale-fix management (FW-005)
     //
-    // TODO(hardware): replace uart_read_bytes stub with real UART driver for
-    //                 NEO-M8N on the board's GPS UART port.
+    // UART2 receives the NEO-M9N NMEA stream; bytes are fed one at a time into
+    // NmeaParser which tracks GPRMC/GPGGA and stale-fix state.
+    // GPS telemetry is published via BleServer::notify_gps() at 1 Hz when a
+    // valid fix is present and a BLE client is subscribed.
     //
-    // The parser runs here; telemetry is published via BleServer::notify_gps()
-    // once the BLE task is running and a client is subscribed.
+    // Pin mapping (hardware/prototyping_wiring.md):
+    //   GPIO17 → M9N RXD  (GPS_RX_CTRL, ESP TX for UBX config commands)
+    //   GPIO18 → M9N TXD  (GPS_TX_NMEA, NMEA sentences to ESP RX)
+    //
+    // Baud rate: NEO-M9N factory default is 38400 bps.
+    // If no NMEA bytes arrive, GPS stays in the "no fix" state — safe no-op.
 
-    static constexpr uint32_t kStaleMs     = 5000;   // mark stale after 5 s silence
-    static constexpr uint32_t kTickMs      = 100;    // task period
-    static constexpr uint32_t kPublishMs   = 1000;   // publish GPS telemetry at 1 Hz
+    static constexpr uart_port_t kGpsUartPort = UART_NUM_2;
+    static constexpr int         kGpsTxPin    = 17;   // ESP TX → M9N RXD
+    static constexpr int         kGpsRxPin    = 18;   // M9N TXD → ESP RX
+    static constexpr int         kGpsBaud     = 38400; // NEO-M9N factory default
+    static constexpr uint32_t    kStaleMs     = 5000;  // mark stale after 5 s silence
+    static constexpr uint32_t    kTickMs      = 100;   // task period
+    static constexpr uint32_t    kPublishMs   = 1000;  // publish GPS telemetry at 1 Hz
 
     ESP_LOGI("gps", "task started (FW-005)");
+
+    // ── UART2 init for NEO-M9N NMEA stream ───────────────────────────────────
+    {
+        const uart_config_t uart_cfg = {
+            .baud_rate  = kGpsBaud,
+            .data_bits  = UART_DATA_8_BITS,
+            .parity     = UART_PARITY_DISABLE,
+            .stop_bits  = UART_STOP_BITS_1,
+            .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+            .source_clk = UART_SCLK_DEFAULT,
+        };
+        esp_err_t err = uart_driver_install(kGpsUartPort, 512, 0, 0, nullptr, 0);
+        if (err != ESP_OK) {
+            ESP_LOGE("gps", "uart_driver_install(UART%d) failed: %s",
+                     static_cast<int>(kGpsUartPort), esp_err_to_name(err));
+            for (;;) { vTaskDelay(pdMS_TO_TICKS(5000)); }
+        }
+        err = uart_param_config(kGpsUartPort, &uart_cfg);
+        if (err != ESP_OK) {
+            ESP_LOGW("gps", "uart_param_config(UART%d) failed: %s",
+                     static_cast<int>(kGpsUartPort), esp_err_to_name(err));
+        }
+        err = uart_set_pin(kGpsUartPort, kGpsTxPin, kGpsRxPin,
+                           UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        if (err != ESP_OK) {
+            ESP_LOGW("gps", "uart_set_pin(tx=GPIO%d rx=GPIO%d) failed: %s",
+                     kGpsTxPin, kGpsRxPin, esp_err_to_name(err));
+        }
+        ESP_LOGI("gps", "UART%d ready: tx=GPIO%d rx=GPIO%d baud=%d",
+                 static_cast<int>(kGpsUartPort), kGpsTxPin, kGpsRxPin, kGpsBaud);
+    }
 
     pakt::NmeaParser parser;
     uint32_t last_valid_ms  = 0;
@@ -2346,12 +2438,17 @@ static void gps_task(void *arg)
             parser.mark_stale();
         }
 
-        // ── UART read placeholder ─────────────────────────────────────────────
-        // Replace with:
-        //   uint8_t byte;
-        //   while (uart_read_bytes(GPS_UART_NUM, &byte, 1, 0) == 1) {
-        //       if (parser.feed(byte)) last_valid_ms = now_ms;
-        //   }
+        // ── Drain UART2 → parser ──────────────────────────────────────────────
+        // Non-blocking: process all bytes currently in the RX FIFO.
+        // If the M9N is not physically wired, uart_read_bytes returns 0 — safe.
+        {
+            uint8_t byte;
+            while (uart_read_bytes(kGpsUartPort, &byte, 1, 0) == 1) {
+                if (parser.feed(byte)) {
+                    last_valid_ms = now_ms;
+                }
+            }
+        }
 
         // ── Publish GPS telemetry via BLE ─────────────────────────────────────
         if ((now_ms - last_publish_ms) >= kPublishMs && parser.valid()) {
