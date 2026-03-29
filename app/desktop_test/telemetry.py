@@ -4,8 +4,10 @@
 # human-readable single-line summaries for the interactive CLI.
 #
 # Wire format (all characteristics, UTF-8 JSON):
-#   device_status : {"radio":"idle","bonded":bool,"gps_fix":bool,
-#                    "pending_tx":n,"rx_queue":n,"uptime_s":n}
+#   device_status : {"radio":"idle","bonded":bool,"encrypted":bool,"gps_fix":bool,
+#                    "pending_tx":n,"rx_queue":n,"rx_freq_hz":n,"tx_freq_hz":n,
+#                    "squelch":n,"volume":n,"wide_band":bool,"debug_enabled":bool,
+#                    "uptime_s":n}
 #   gps_telem     : {"lat":f,"lon":f,"alt_m":f,"speed_kmh":f,"course":f,
 #                    "sats":n,"fix":n,"ts":n}
 #   power_telem   : {"batt_v":f,"batt_pct":n,"tx_dbm":f,"vswr":f,"temp_c":f}
@@ -26,9 +28,16 @@ from typing import Optional
 class DeviceStatus:
     radio:      str  = "unknown"
     bonded:     bool = False
+    encrypted:  bool = False
     gps_fix:    bool = False
     pending_tx: int  = 0
     rx_queue:   int  = 0
+    rx_freq_hz: int  = 0
+    tx_freq_hz: int  = 0
+    squelch:    int  = 0
+    volume:     int  = 0
+    wide_band:  bool = True
+    debug_enabled: bool = False
     uptime_s:   int  = 0
     received_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -39,9 +48,16 @@ class DeviceStatus:
             return cls(
                 radio      = str(d.get("radio", "unknown")),
                 bonded     = bool(d.get("bonded", False)),
+                encrypted  = bool(d.get("encrypted", False)),
                 gps_fix    = bool(d.get("gps_fix", False)),
                 pending_tx = int(d.get("pending_tx", 0)),
                 rx_queue   = int(d.get("rx_queue", 0)),
+                rx_freq_hz = int(d.get("rx_freq_hz", 0)),
+                tx_freq_hz = int(d.get("tx_freq_hz", 0)),
+                squelch    = int(d.get("squelch", 0)),
+                volume     = int(d.get("volume", 0)),
+                wide_band  = bool(d.get("wide_band", True)),
+                debug_enabled = bool(d.get("debug_enabled", False)),
                 uptime_s   = int(d.get("uptime_s", 0)),
             )
         except (json.JSONDecodeError, TypeError, ValueError):
@@ -50,9 +66,12 @@ class DeviceStatus:
     def summary(self) -> str:
         fix   = "fix" if self.gps_fix else "no-fix"
         bond  = "bonded" if self.bonded else "open"
+        enc   = "enc" if self.encrypted else "plain"
         up    = _fmt_uptime(self.uptime_s)
-        return (f"radio={self.radio:<5}  {bond:<6}  GPS:{fix:<6}  "
-                f"pending_tx={self.pending_tx}  rx_q={self.rx_queue}  up={up}")
+        freq = f"{self.rx_freq_hz}/{self.tx_freq_hz}" if self.rx_freq_hz or self.tx_freq_hz else "n/a"
+        return (f"radio={self.radio:<5}  {bond:<6} {enc:<5}  GPS:{fix:<6}  "
+                f"pending_tx={self.pending_tx}  rx_q={self.rx_queue}  "
+                f"f={freq} sq={self.squelch} vol={self.volume} up={up}")
 
 
 @dataclass

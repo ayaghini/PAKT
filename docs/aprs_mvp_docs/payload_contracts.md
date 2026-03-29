@@ -5,8 +5,8 @@ Authority: single source of truth for all JSON wire formats exchanged over BLE.
 
 This document defines the exact JSON schema for every JSON GATT characteristic read,
 write, and notification payload. Firmware (`PayloadValidator`, `TxResultEncoder`,
-`Telemetry.h`) and the desktop app (`pakt_client.py`, `message_tracker.py`)
-must both conform to these schemas.
+`Telemetry.h`) and the client apps (`pakt_client.py`, `message_tracker.py`, iPhone BLE models)
+must all conform to these schemas.
 
 KISS-over-BLE is part of MVP, but it is a binary framing contract rather than a
 JSON contract. The KISS source of truth is:
@@ -66,6 +66,66 @@ Invalid writes are rejected; the firmware does not enqueue the message.
 
 ---
 
+## 2a. Device Command (0xA002) - write only, encrypted+bonded
+
+The command channel carries small one-shot JSON payloads. Each payload must include
+`"cmd"` and may include additional fields depending on the command family.
+
+### 2a.1 Debug stream control
+
+```json
+{
+  "cmd": "debug_stream",
+  "enabled": true
+}
+```
+
+| Field     | Type   | Required | Constraints |
+|-----------|--------|----------|-------------|
+| `cmd`     | string | Yes      | Must be `"debug_stream"` |
+| `enabled` | bool   | Yes      | `true` enables BLE debug notify; `false` disables it |
+
+### 2a.2 Radio control
+
+```json
+{
+  "cmd": "radio_set",
+  "rx_freq_hz": 144390000,
+  "tx_freq_hz": 144390000,
+  "squelch": 2,
+  "volume": 4,
+  "wide_band": true
+}
+```
+
+At least one supported radio field must be present.
+
+| Field        | Type   | Required | Constraints |
+|--------------|--------|----------|-------------|
+| `cmd`        | string | Yes      | Must be `"radio_set"` |
+| `freq_hz`    | int    | No       | Positive Hz value; sets both RX and TX |
+| `rx_freq_hz` | int    | No       | Positive Hz value |
+| `tx_freq_hz` | int    | No       | Positive Hz value |
+| `squelch`    | int    | No       | `0–8` |
+| `volume`     | int    | No       | `1–8` |
+| `wide_band`  | bool   | No       | `true` wide, `false` narrow |
+
+### 2a.3 One-shot beacon
+
+```json
+{
+  "cmd": "beacon_now"
+}
+```
+
+| Field   | Type   | Required | Constraints |
+|---------|--------|----------|-------------|
+| `cmd`   | string | Yes      | Must be `"beacon_now"` |
+
+Malformed payloads or unsupported `cmd` values are rejected and must not change device state.
+
+---
+
 ## 3. TX Result (0xA012) - notify only (firmware -> BLE)
 
 Sent by firmware at two points in the TX lifecycle:
@@ -109,9 +169,16 @@ Encoding is performed by `TxResultEncoder::encode()` in firmware.
 {
   "radio": "idle",
   "bonded": true,
+  "encrypted": true,
   "gps_fix": true,
   "pending_tx": 0,
   "rx_queue": 0,
+  "rx_freq_hz": 144390000,
+  "tx_freq_hz": 144390000,
+  "squelch": 1,
+  "volume": 4,
+  "wide_band": true,
+  "debug_enabled": false,
   "uptime_s": 3600
 }
 ```
@@ -120,35 +187,33 @@ Encoding is performed by `TxResultEncoder::encode()` in firmware.
 |--------------|--------|-----------------------------------------------------|
 | `radio`      | string | `"idle"`, `"tx"`, `"rx"`, `"error"`, `"unknown"`   |
 | `bonded`     | bool   | True if a BLE bond is currently active              |
+| `encrypted`  | bool   | True if the current BLE link is encrypted           |
 | `gps_fix`    | bool   | True if a current GPS fix is held by NmeaParser     |
 | `pending_tx` | int    | Number of non-terminal messages in TxScheduler      |
 | `rx_queue`   | int    | Number of decoded RX packets waiting to be read     |
+| `rx_freq_hz` | int    | Current SA818 RX frequency in Hz                    |
+| `tx_freq_hz` | int    | Current SA818 TX frequency in Hz                    |
+| `squelch`    | int    | Current SA818 squelch setting                       |
+| `volume`     | int    | Current SA818 volume setting                        |
+| `wide_band`  | bool   | Current SA818 bandwidth mode                        |
+| `debug_enabled` | bool | True if the BLE debug stream is currently enabled  |
 | `uptime_s`   | int    | Seconds since firmware boot                         |
 
-*Not yet implemented in firmware; schema reserved for Step 7.*
 Desktop app `DeviceStatus.parse()` in `telemetry.py` uses these exact key names.
 
 ---
 
 ## 5. RX Packet (0xA010) - notify only
 
-```json
-{
-  "from": "W1AW-9",
-  "to": "APRS",
-  "path": "WIDE1-1",
-  "info": ">PAKT v0.1"
-}
+Canonical payload is a UTF-8 TNC2 monitor string, not JSON.
+
+Example:
+
+```text
+W1AW-9>APRS,WIDE1-1:>PAKT v0.1
 ```
 
-| Field  | Type   | Description                        |
-|--------|--------|------------------------------------|
-| `from` | string | Source callsign-SSID               |
-| `to`   | string | Destination callsign               |
-| `path` | string | Digipeater path string             |
-| `info` | string | APRS information field (raw UTF-8) |
-
-*Not yet implemented; schema reserved for Step 6 (RX pipeline).*
+Clients should treat the whole payload as one line of human-readable APRS monitor text.
 
 ---
 
@@ -203,6 +268,24 @@ Desktop app `PowerTelem.parse()` in `telemetry.py` consumes this schema.
 
 ---
 
+## 7a. Debug Stream (0xA024) - notify only
+
+Debug stream payloads are UTF-8 text lines, not JSON.
+
+Example:
+
+```text
+[radio] radio_set rx=144390000 tx=144390000 squelch=1 volume=4 wide=true
+```
+
+Rules:
+- stream is disabled by default
+- stream is enabled with `{"cmd":"debug_stream","enabled":true}`
+- each notify payload is one operator-facing line
+- clients should display it as append-only session log text
+
+---
+
 ## 8. Device Capabilities (0xA004) - read only, no security restriction
 
 ```json
@@ -241,4 +324,3 @@ Desktop app `SysTelem.parse()` in `telemetry.py` consumes this schema.
 - Floating-point: use sufficient precision (≥ 4 decimal places for lat/lon).
 - No trailing commas.
 - Extra unknown fields in write payloads are silently ignored by the validator.
-

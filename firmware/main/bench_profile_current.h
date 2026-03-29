@@ -13,6 +13,12 @@ namespace pakt::benchcfg {
 
 inline constexpr const char *kProfileName = "current";
 
+enum class LogVerbosity : uint8_t {
+    Quiet = 0,
+    Normal,
+    Verbose,
+};
+
 enum class RxInputMode : uint8_t {
     Left = 0,
     Right,
@@ -39,6 +45,7 @@ inline constexpr bool kStartBleTask      = true;
 inline constexpr bool kStartPowerTask    = true;
 
 inline constexpr bool kQuietCaptureMode  = false;
+inline constexpr LogVerbosity kLogVerbosity = LogVerbosity::Normal;
 inline constexpr bool kExportBinaryChunks = false;
 inline constexpr uint32_t kExportFlushLineInterval = 64;
 inline constexpr uint32_t kExportYieldMs = 1;

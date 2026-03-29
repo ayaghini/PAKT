@@ -71,6 +71,9 @@ public:
     // Returns true if a matching PENDING message was found.
     bool notify_ack(const char *ack_msg_id);
 
+    // Inspection helper for status/telemetry publishing.
+    size_t pending_tx_count() const;
+
 private:
     // notify_fn_ MUST be declared before scheduler_ so it is initialized first;
     // the scheduler's callbacks capture 'this' and call notify_fn_ at runtime.

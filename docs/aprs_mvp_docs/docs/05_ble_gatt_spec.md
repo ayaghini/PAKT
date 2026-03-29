@@ -4,8 +4,9 @@ This document defines the Bluetooth Low Energy Generic Attribute Profile (GATT)
 for the APRS Pocket TNC.
 
 Client note:
-- MVP development uses the Windows desktop BLE test app first.
-- Phone app integration follows after desktop validation of GATT behavior.
+- MVP development started with the desktop BLE test app.
+- The repo now also carries an iPhone-only SwiftUI app track under `app/ios/`.
+- Protocol compatibility between desktop and iPhone clients is a requirement: new app-facing features should extend the existing contract rather than fork it.
 
 ## Services Overview
 
@@ -66,6 +67,14 @@ Standard BLE service.
 | **GPS Telemetry**    | `0xA021`      | `544E4332-8A48-4328-9844-3F5CA0210000` | Notify     | 128 B           | UTF-8 JSON  | `{"lat":49.035,"lon":-123.100,"alt_m":150.0,"speed_kmh":12.5,"course":90.0,"sats":8,"fix":1,"ts":764426119}` |
 | **Power Telemetry**  | `0xA022`      | `544E4332-8A48-4328-9844-3F5CA0220000` | Notify     | 96 B            | UTF-8 JSON  | `{"batt_v":3.95,"batt_pct":88,"tx_dbm":30.0,"vswr":1.2,"temp_c":34.5}` |
 | **System Telemetry** | `0xA023`      | `544E4332-8A48-4328-9844-3F5CA0230000` | Notify     | 96 B            | UTF-8 JSON  | `{"free_heap":120000,"min_heap":95000,"cpu_pct":22,"tx_pkts":5,"rx_pkts":3,"tx_errs":0,"rx_errs":0,"uptime_s":1800}` |
+| **Debug Stream**     | `0xA024`      | `544E4332-8A48-4328-9844-3F5CA0240000` | Notify     | 180 B logical   | UTF-8 text  | Runtime debug lines, emitted only when enabled by `Device Command` |
+
+Debug stream rules:
+
+- Disabled by default.
+- Enabled and disabled using `{"cmd":"debug_stream","enabled":true|false}` on `Device Command`.
+- Intended for operator-facing runtime diagnostics in the desktop and iPhone apps.
+- Firmware should emit scoped, human-readable lines only for selected categories; it must not blindly mirror all ESP logs onto BLE.
 
 ---
 
@@ -105,6 +114,47 @@ For KISS binary framing and service behavior, use:
 - Restrict write access (`Device Config`, `Device Command`, `TX Request`, `KISS TX`) to encrypted + bonded links.
 - Require a physical user action (pair button or boot-time pairing window) before accepting new bonds.
 - Enforce an application-level allowlist for privileged commands (for example `radio_set`).
+
+## Device Command notes
+
+The `Device Command` characteristic remains the single command channel for one-shot actions and radio/debug control.
+
+Current command families:
+
+1. `{"cmd":"beacon_now"}`
+- immediate APRS position beacon attempt using current config and latest GPS snapshot
+
+2. `{"cmd":"debug_stream","enabled":true|false}`
+- toggles the dedicated debug notify stream on `0xA024`
+
+3. `{"cmd":"radio_set", ...}`
+- supported fields are optional and may be combined in one write:
+  - `freq_hz`
+  - `rx_freq_hz`
+  - `tx_freq_hz`
+  - `squelch`
+  - `volume`
+  - `wide_band`
+- unsupported or malformed payloads are rejected
+
+## Device Status notes
+
+`Device Status` is now a live dashboard-oriented notify, not a reserved placeholder.
+
+Current status payload includes at least:
+- `radio`
+- `bonded`
+- `encrypted`
+- `gps_fix`
+- `pending_tx`
+- `rx_queue`
+- `rx_freq_hz`
+- `tx_freq_hz`
+- `squelch`
+- `volume`
+- `wide_band`
+- `debug_enabled`
+- `uptime_s`
 
 ## Transport and MTU Notes
 

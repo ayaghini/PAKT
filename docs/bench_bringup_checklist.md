@@ -184,15 +184,21 @@ Record: AF_TX_COUPLED attenuation setting, measured deviation, SA818 AF_OUT leve
 
 ## Step 8 — GPS NMEA lock
 
-**Goal:** confirm GPS UART and fix acquisition.
+**Goal:** confirm GPS transport and fix acquisition.
 
-1. [ ] Connect u-blox M8 to Feather per wiring plan (TX=GPIO17/GPS_RX_CTRL, RX=GPIO18/GPS_TX_NMEA)
+1. [ ] Connect the u-blox module to the Feather default I2C/STEMMA bus (`GPIO3` SDA, `GPIO4` SCL) and confirm `0x42` appears on the boot I2C scan
 2. [ ] Place GPS module with sky view (window or outdoors)
-3. [ ] Serial log shows NMEA sentences being received (firmware GPS task log)
-4. [ ] Wait for fix (typically 30–60 s cold start, <5 s hot start)
-5. [ ] BLE GPS telemetry notify shows non-zero `lat`, `lon`, `sats ≥ 4`, `fix = 1`
+3. [ ] Serial log shows raw NMEA sentences being received from `gps_task` even before fix
+4. [ ] BLE GPS telemetry notify updates at 1 Hz; `fix=0` is acceptable before lock
+5. [ ] Wait for fix (typically 30–60 s cold start, <5 s hot start)
+6. [ ] BLE GPS telemetry notify shows non-zero `lat`, `lon`, `sats ≥ 4`, `fix = 1`
 
 Record: time to first fix, sat count at fix, lat/lon vs known reference.
+
+Current verified note from 2026-03-28:
+- the shared Feather I2C/STEMMA GPS path is now working on the current prototype
+- GPS telemetry is reaching the app over BLE
+- this step should now treat shared-I2C GPS transport as the known-good baseline; remaining work is fix timing, repeatability, and longer-run validation
 
 ---
 

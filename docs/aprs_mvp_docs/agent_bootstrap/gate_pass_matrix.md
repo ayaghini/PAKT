@@ -1,7 +1,7 @@
 # MVP Gate Pass Matrix
 
-Generated: 2026-03-27
-Agent step: Step 10+ MVP workstream advance — GPS UART live, APRS ack path wired, main firmware production mode
+Generated: 2026-03-28
+Agent step: Step 10+ MVP workstream advance — GPS UART live, APRS ack path wired, main firmware production mode, native app protocol expansion
 
 Legend:
 - `pass`    — verified in software / CI; no hardware required
@@ -45,6 +45,7 @@ Legend:
 | Check | Status | Notes |
 |---|---|---|
 | Desktop harness connect/reconnect and log export | **partial** | BleTransport FSM (3-attempt reconnect), config R/W, log export fully implemented and tested (45 tests). Hardware BLE validation blocked. |
+| iPhone operator app scaffold builds against current protocol | **partial** | SwiftUI iPhone app under `app/ios/` with shared UUIDs, chunking, native RX/TX/status/GPS/debug screens, and protocol-aligned models. Protocol alignment verified 2026-03-28: all UUIDs, JSON field names, and payload structures confirmed matching firmware exactly. Xcode project regenerated; Simulator build confirmed; physical-device iPhone build also succeeds on this machine with local development signing. App install/launch and BLE runtime validation on a phone are still pending. |
 | 1 hour continuous RX BLE session stable | **blocked** | Requires hardware. Dependency: QA-004 (BLE endurance matrix) |
 | Reconnect works after link drop and device reboot | **partial** | BleTransport reconnect FSM implemented (RECONNECTING→CONNECTED/ERROR with on_reconnected callback, re-subscription). Validated in test_app.py mocks. Real link drop testing blocked pending hardware. |
 | Chunk reassembly handles loss/duplicates/timeouts | **pass** | BleChunker (C++) and chunker.py (Python) both handle duplicate chunks, LRU slot eviction, and timeouts. 18 C++ + 25 Python tests pass. |
@@ -104,7 +105,8 @@ The CI pipeline constitutes the regression suite for firmware releases:
 | PTT stuck-on under BLE fault or task crash | High | FW-016 software-complete: PttWatchdog + PttController + watchdog_task wired (21 host tests). Sa818Radio (FW-003) software-complete: 18 host tests; radio_task registers direct-GPIO watchdog callback before init then upgrades to radio.ptt(false) after init. Hardware fault injection test remains blocked. | Firmware / G3 hardware bring-up |
 | TxScheduler wired into APRS task (radio TX stub) | Low | TxScheduler IS integrated via AprsTaskContext in aprs_task (ctx.tick()), 26 host tests pass. RadioTxFn and RawTxFn stubs replaced (pass 4) with real `afsk_tx_frame()` (Sa818Radio.ptt + AfskModulator + I2S write). Reported 2026-03-19 bench pass indicates the underlying supervised tone-TX path is alive on hardware; APRS packet transmission still needs deviation and decode validation. | Firmware / Step 7 hardware |
 | TX result notify wire format not confirmed against firmware | Low | Python MessageTracker parses `{"msg_id":"...","status":"..."}` — TxResultEncoder confirmed to emit exactly that format. Wire format mismatch risk eliminated by code inspection. On-air round-trip still hardware-gated. | Firmware+App / Step 7 hardware |
-| GPS parser (FW-005) software done; UART integration blocked | Low | NmeaParser implemented (GPRMC/GPGGA, checksum, Unix timestamp, stale-fix); 37 host tests pass. gps_task UART driver now wired (2026-03-27): UART2 on GPIO17/GPIO18 at 38400 baud (NEO-M9N factory default). Task will stay in "no fix" state if M9N UART isn't physically wired — safe no-op. Hardware validation pending. | Firmware / Step 4b hardware bring-up |
+| GPS parser + shared-I2C transport now working on hardware | Low | NmeaParser implemented (GPRMC/GPGGA, checksum, Unix timestamp, stale-fix); 37 host tests pass. gps_task now prefers the shared Feather I2C/STEMMA bus (`u-blox M9N @ 0x42`) and retains UART2 on GPIO17/GPIO18 at 38400 baud as a fallback. Shared-I2C GPS is now working on the current prototype and BLE/app GPS telemetry has been observed live. Remaining work is longer-run stability and fix-acquisition characterization, not first transport proof. | Firmware / follow-up endurance + app validation |
+| Native app protocol drift between desktop and iPhone clients | Medium | Firmware now exposes a dedicated debug stream and richer device status. `05_ble_gatt_spec.md`, `payload_contracts.md`, `app/desktop_test/`, and `app/ios/` must stay aligned as the iPhone app lands. | Firmware+Apps / ongoing |
 
 ---
 
@@ -116,18 +118,23 @@ The CI pipeline constitutes the regression suite for firmware releases:
 **Additional wiring (2026-03-27 Step 10):**
 - Main firmware now in production mode: all bench stages off, AFSK demodulator runs continuously, decoded frames forward to both native BLE and KISS RX.
 - APRS ack detection wired: aprs_task RX drain loop parses inbound ack messages and calls `ctx.notify_ack()` → TxScheduler → BLE `tx_result` notify. Previously this link was missing; `notify_ack()` was never called.
-- GPS UART live: gps_task now inits UART2 on GPIO17/GPIO18 at 38400 baud; NmeaParser fed byte-by-byte; GPS telemetry published via BLE when fix valid.
+- GPS transport live: gps_task now prefers shared I2C (`u-blox M9N @ 0x42`) with UART2 fallback, feeds NMEA byte-by-byte into NmeaParser, logs raw sentence activity, and publishes BLE GPS telemetry even before fix.
+- Native app protocol expanded: `Device Command` now supports `debug_stream`, `radio_set`, and `beacon_now`; `Device Status` now exposes radio/runtime fields; a dedicated `Debug Stream` notify characteristic exists on `0xA024`.
+- Desktop client updated to parse the richer `device_status` payload and the new `debug_stream`.
+- iPhone app track started: in-repo SwiftUI scaffold under `app/ios/` with CoreBluetooth transport, shared UUIDs/chunking, RX/TX/GPS/radio/debug screens, and protocol smoke tests.
 - TX result wire format confirmed by code inspection: firmware `TxResultEncoder` emits `{"msg_id":"...","status":"..."}` exactly matching Python `MessageTracker.on_tx_result()`.
 - BLE security reviewed: all write endpoints (config, tx_request, KISS TX) enforce `sec_state.encrypted && sec_state.bonded`; return `BLE_ATT_ERR_INSUFFICIENT_AUTHEN`. LE SC configured (`sm_sc=1`, `sm_bonding=1`).
 - PTT safety reviewed: `ptt_safe_off()` registered before SA818 init (direct GPIO path); upgraded to `radio.ptt(false)` after init. Watchdog heartbeat called in all bench loops and main run loop. PTT always de-asserted at end of `afsk_tx_frame()` including error paths.
 **Hardware-progressed but still open:** Step 1 now has reported SA818 UART/PTT plus supervised RF tone-TX and refreshed APRS packet-TX evidence on the current prototype state, and Step 2 now has confirmed live codec/radio audio-path evidence plus successful on-device APRS RX decode on the corrected quiet profile.
-**Hardware-blocked:** Calibrated deviation measurement, controlled-condition RX repeatability, BLE security on-hardware validation, PTT fault injection, GPS UART hardware validation (M9N UART wiring), on-air ack round-trip, full end-to-end validation of Steps 3–8, G1 repeatability items, G2(endurance), G3(hardware), G4; third-party KISS client validation; power telemetry (MAX17048 driver not yet wired)
+**Hardware-blocked:** Calibrated deviation measurement, controlled-condition RX repeatability, BLE security on-hardware validation, PTT fault injection, on-air ack round-trip, full end-to-end validation of Steps 3–8, G1 repeatability items, G2(endurance), G3(hardware), G4; third-party KISS client validation; power telemetry (MAX17048 driver not yet wired)
 **MVP milestone gate:** OPEN — G0(software) passes; G0(hardware), G1, G2(KISS coexistence hardware), G3, G4 blocked pending EVT prototype
 
 **Next unblocking action:** Prototype hardware validation. Priority order for the next bench session:
-1. Flash the current build and verify BLE advertising + GATT services enumerate correctly
-2. Pair and verify write-without-bond rejection (G3 hardware)
-3. Verify PTT GPIO safe-off on watchdog timeout (G3 hardware)
-4. Verify APRS RX decode → BLE rx_packet and KISS RX notify path with live packets
-5. Measure TX deviation against a calibrated receiver or service monitor
-6. Check GPS NMEA output on UART2 GPIO18 once M9N UART is physically wired
+1. Build and install the iPhone app to a paired iPhone using the locally configured development team, then validate connect, live RX, GPS status, TX request/tx_result, `radio_set`, and debug stream enable/disable
+2. Validate the iPhone app against current firmware: connect, live RX, GPS status, TX request/tx_result, `radio_set`, debug stream enable/disable
+3. Verify BLE advertising + GATT services enumerate correctly from the desktop side too, including the new debug stream characteristic
+4. Pair and verify write-without-bond rejection (G3 hardware)
+5. Verify PTT GPIO safe-off on watchdog timeout (G3 hardware)
+6. Verify APRS RX decode → BLE `rx_packet` and KISS RX notify path with live packets
+7. Measure TX deviation against a calibrated receiver or service monitor
+8. Expand GPS validation from baseline proof into repeatability/endurance: cold/warm starts, fix timing, and coexistence with the rest of the runtime on the shared Feather I2C bus (`0x42`)

@@ -1,0 +1,44 @@
+name: PAKTiOS
+options:
+  bundleIdPrefix: com.pakt
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 17.0
+    TARGETED_DEVICE_FAMILY: 1
+    DEVELOPMENT_TEAM: "74X5K4W24N"
+targets:
+  PAKTiOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - PAKTiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pakt.ios
+        PRODUCT_NAME: PAKTiOS
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: PAKTiOS
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: PAKTiOS connects to your PAKT APRS device over Bluetooth.
+        INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription: PAKTiOS connects to your PAKT APRS device over Bluetooth.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone:
+          - UIInterfaceOrientationPortrait
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      testTargets:
+        - PAKTiOSTests
+  PAKTiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - PAKTiOSTests
+    dependencies:
+      - target: PAKTiOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pakt.ios.tests
+        GENERATE_INFOPLIST_FILE: YES

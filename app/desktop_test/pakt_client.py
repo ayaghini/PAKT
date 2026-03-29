@@ -42,6 +42,7 @@ UUID_TX_RESULT   = _B.format(0xA0120000)
 UUID_GPS_TELEM   = _B.format(0xA0210000)
 UUID_POWER_TELEM = _B.format(0xA0220000)
 UUID_SYS_TELEM   = _B.format(0xA0230000)
+UUID_DEBUG_STREAM = _B.format(0xA0240000)
 
 # Standard DIS UUIDs (Bluetooth SIG 16-bit)
 UUID_MANUFACTURER = "00002a29-0000-1000-8000-00805f9b34fb"
@@ -55,6 +56,7 @@ NOTIFY_CHARS: dict[str, str] = {
     "gps_telem":     UUID_GPS_TELEM,
     "power_telem":   UUID_POWER_TELEM,
     "system_telem":  UUID_SYS_TELEM,
+    "debug_stream":  UUID_DEBUG_STREAM,
 }
 
 
@@ -284,6 +286,8 @@ class PaktClient:
         # Route RX packet frames into diagnostics.
         elif name == "rx_packet":
             self._diagnostics.add_rx_frame(text)
+        elif name == "debug_stream":
+            self._diagnostics.add_debug_line(text)
         # Route all telemetry notifies into diagnostics store.
         telem_obj = parse_notify(name, text)
         if telem_obj is not None:

@@ -73,7 +73,7 @@ bool Sa818Radio::set_freq(uint32_t rx_hz, uint32_t tx_hz)
     char resp[kRespBufLen];
 
     size_t n = Sa818CommandFormatter::set_group(
-        cmd, sizeof(cmd), rx_hz, tx_hz, squelch_, /*wide_band=*/true);
+        cmd, sizeof(cmd), rx_hz, tx_hz, squelch_, wide_band_);
     if (n == 0) return false;
 
     if (!exchange(cmd, n, resp, sizeof(resp))) {
@@ -101,7 +101,7 @@ bool Sa818Radio::set_squelch(uint8_t level)
     char cmd[kCmdBufLen];
     char resp[kRespBufLen];
     const size_t n = Sa818CommandFormatter::set_group(
-        cmd, sizeof(cmd), rx_hz_, tx_hz_, squelch_, /*wide_band=*/true);
+        cmd, sizeof(cmd), rx_hz_, tx_hz_, squelch_, wide_band_);
     if (n == 0) return false;
     if (!exchange(cmd, n, resp, sizeof(resp))) return false;
     return Sa818ResponseParser::parse_set_group(resp) == Sa818ResponseParser::Result::Ok;
@@ -117,7 +117,22 @@ bool Sa818Radio::set_volume(uint8_t level)
     if (n <= 0 || static_cast<size_t>(n) >= sizeof(cmd)) return false;
     if (!exchange(cmd, static_cast<size_t>(n), resp, sizeof(resp))) return false;
     const char *colon = strchr(resp, ':');
-    return colon && colon[1] == '0';
+    const bool ok = colon && colon[1] == '0';
+    if (ok) volume_ = level;
+    return ok;
+}
+
+bool Sa818Radio::set_bandwidth(bool wide_band)
+{
+    wide_band_ = wide_band;
+    if (!initialized_ || rx_hz_ == 0) return true;
+    char cmd[kCmdBufLen];
+    char resp[kRespBufLen];
+    const size_t n = Sa818CommandFormatter::set_group(
+        cmd, sizeof(cmd), rx_hz_, tx_hz_, squelch_, wide_band_);
+    if (n == 0) return false;
+    if (!exchange(cmd, n, resp, sizeof(resp))) return false;
+    return Sa818ResponseParser::parse_set_group(resp) == Sa818ResponseParser::Result::Ok;
 }
 
 bool Sa818Radio::set_power(RadioPower power)

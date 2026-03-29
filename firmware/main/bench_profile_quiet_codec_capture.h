@@ -11,6 +11,12 @@ namespace pakt::benchcfg {
 
 inline constexpr const char *kProfileName = "quiet_codec_capture";
 
+enum class LogVerbosity : uint8_t {
+    Quiet = 0,
+    Normal,
+    Verbose,
+};
+
 enum class RxInputMode : uint8_t {
     Left = 0,
     Right,
@@ -37,6 +43,7 @@ inline constexpr bool kStartBleTask      = false;
 inline constexpr bool kStartPowerTask    = false;
 
 inline constexpr bool kQuietCaptureMode  = true;
+inline constexpr LogVerbosity kLogVerbosity = LogVerbosity::Verbose;
 inline constexpr bool kExportBinaryChunks = true;
 inline constexpr uint32_t kExportFlushLineInterval = 8;
 inline constexpr uint32_t kExportYieldMs = 10;

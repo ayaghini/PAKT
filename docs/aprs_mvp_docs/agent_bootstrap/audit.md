@@ -5,6 +5,81 @@ Purpose: rolling implementation and verification ledger for the current MVP bran
 
 ---
 
+## Shared-I2C GPS confirmed stable on prototype + app telemetry live (2026-03-28)
+
+Status: hardware verified during the current working session.
+
+Summary:
+
+### What was found
+- The GPS module is wired on the Feather default I2C/STEMMA bus, not the older UART-only path.
+- On the current hardware, the `u-blox M9N @ 0x42` may appear after boot rather than during the initial I2C scan.
+- The original fallback behavior stayed on UART once selected, so GPS could appear later on I2C while the firmware continued reporting `src=uart bytes=0`.
+
+### Firmware changes made
+- `gps_task` now:
+  - prefers the shared I2C/DDC GPS path on `0x42`
+  - retains `UART2` as a fallback only for alternate wiring
+  - can hot-switch from UART fallback to I2C if the GPS appears after boot
+  - publishes BLE GPS telemetry even before fix
+  - emits GPS-focused diagnostics suitable for bring-up
+- Runtime logging was reduced in the main profile:
+  - periodic idle audio stats/tone logs suppressed
+  - repeated BLE `not connected` notify warnings suppressed
+  - low-level `i2c.master` chatter is now effectively debug-only in normal builds
+- GPS I2C access was made less aggressive for stability:
+  - GPS device access reduced to `100 kHz`
+  - longer I2C transaction timeouts
+  - read-failure backoff added
+  - slower reprobe cadence
+
+### Hardware result
+- Shared-I2C GPS is now working on the current prototype.
+- GPS data is now reaching the app over BLE.
+- This closes the earlier “GPS transport live validation pending” state for the default Feather I2C/STEMMA wiring.
+
+Current status impact:
+- GPS should now be treated as part of the working baseline on the current prototype, not as an open transport bring-up item.
+- Remaining GPS work is now broader validation:
+  - cold/warm start behavior
+  - time-to-first-fix characterization
+  - coexistence/endurance with the rest of the MVP runtime
+
+---
+
+## iPhone app signing configured + protocol alignment verified (2026-03-28)
+
+Status: protocol verified; simulator build passes; physical-device iPhone build succeeds on this machine; install/runtime validation still pending.
+
+Summary:
+
+### app/ios/project.yml
+- Local development-team signing is configured on this machine.
+- Xcode project regenerated with XcodeGen; Simulator build confirmed clean.
+- Physical-device build against a paired iPhone also completed successfully with `xcodebuild -allowProvisioningUpdates`.
+- The generated Xcode project should still be treated as derived output: keep `app/ios/project.yml` and `app/ios/PAKTiOS.xcodeproj` in sync, because the app bundle identifier in the generated project output should be rechecked on future regenerations.
+
+### Protocol alignment review (no code changes required)
+- All 17 BLE characteristic UUIDs in iOS `BLEProtocol.swift` confirmed matching firmware `BleUuids.h`.
+- All JSON field names and types in iOS `Models.swift` confirmed matching `payload_contracts.md` and firmware `Telemetry.cpp::to_json()`.
+- Chunking protocol in iOS `Reassembler` matches firmware `BleChunker`: 3-byte header (msg_id|chunk_idx|chunk_total), timeout/eviction, duplicate drop.
+- Debug stream subscription design confirmed correct: not in `notifyCharacteristics` (auto-off), managed via `setDebugStreaming()`.
+- Two XCTest cases cover `DeviceStatus` JSON decode (all 13 fields) and chunking round-trip.
+
+### To deploy to a paired iPhone
+1. Ensure a valid local Apple Development Team is selected in the generated Xcode project signing settings.
+2. Then run:
+```
+cd app/ios
+xcodebuild -project PAKTiOS.xcodeproj -scheme PAKTiOS \
+  -destination "platform=iOS,name=<paired iPhone>" \
+  -allowProvisioningUpdates build
+```
+3. Or open `app/ios/PAKTiOS.xcodeproj` in Xcode and click Run with the iPhone selected.
+4. Physical install, launch, and BLE runtime validation are still open and must be confirmed on hardware.
+
+---
+
 ## MVP workstream advance — main firmware production mode + ack path + GPS UART (2026-03-27)
 
 Status: code-complete; hardware validation pending.
@@ -24,12 +99,12 @@ Summary of changes in this session:
   timed out regardless of whether a real ack was received.
 - Stale comment "Until the audio pipeline is wired this queue is always empty" removed.
 
-**GPS UART driver wired (FW-005 stub replaced):**
-- `gps_task` now initialises UART2 on GPIO17 (TX→M9N RXD) / GPIO18 (M9N TXD→ESP RX)
-  at 38400 baud (NEO-M9N factory default).
-- Drains UART2 RX FIFO each 100 ms tick and feeds bytes into `NmeaParser::feed()`.
-- If the M9N UART isn't physically wired, `uart_read_bytes` returns 0 — safe no-op.
-- GPS telemetry publishes via `BleServer::notify_gps()` at 1 Hz when fix is valid.
+**GPS transport wired (FW-005 stub replaced):**
+- `gps_task` now prefers the shared Feather I2C/STEMMA bus and probes `u-blox M9N @ 0x42`.
+- `UART2` on GPIO17/GPIO18 at 38400 baud is retained as a fallback for older point-to-point wiring.
+- Incoming bytes are still fed into `NmeaParser::feed()` one byte at a time.
+- Raw NMEA sentence activity is now logged even before fix acquisition.
+- BLE GPS telemetry now publishes at 1 Hz even in the no-fix state so clients can distinguish "GPS alive" from "no traffic".
 
 **Main firmware mode:**
 - `bench_profile_current.h` now has all bench stages disabled
@@ -1092,3 +1167,73 @@ Key verified values: worst-case AX.25 (330 B, 0xFF) → 22 400 samples < 25 600 
 1. Hardware bring-up (HW-010): flash/boot → G3 BLE security → G3 PTT safe-off → SA818 UART → SGTL5000 MCLK.
 2. KISS TX validation: `kiss_bridge.py` → firmware KISS RX → AFSK TX on SA818 output.
 3. GPS task UART: replace stub driver in `gps_task` with real UART read loop.
+
+---
+
+## Fix Log (2026-03-28)
+
+Scope: prepare the native BLE protocol and in-repo client tooling for an iPhone MVP operator app while preserving compatibility with the existing desktop client.
+
+### Firmware protocol changes
+
+- Added a dedicated BLE debug notify characteristic on `0xA024` under the telemetry service.
+- Expanded `Device Status` to carry:
+  - `encrypted`
+  - `rx_freq_hz`
+  - `tx_freq_hz`
+  - `squelch`
+  - `volume`
+  - `wide_band`
+  - `debug_enabled`
+- Replaced the `Device Command` stub with real JSON command handling for:
+  - `debug_stream`
+  - `radio_set`
+  - `beacon_now`
+- Added runtime status publication and lightweight BLE-facing debug logging hooks.
+- Updated the native `rx_packet` BLE notify path to emit the documented TNC2 monitor string instead of raw AX.25 bytes.
+
+### Client/tooling changes
+
+- Desktop app updated for:
+  - `debug_stream` notify support
+  - richer `device_status` parsing
+- New iPhone app scaffold added under `app/ios/`:
+  - SwiftUI app shell
+  - CoreBluetooth manager
+  - shared UUID/chunking models
+  - screens for connect, packets, GPS, transmit, radio, and debug
+  - protocol smoke tests
+
+### Documentation changes
+
+- `05_ble_gatt_spec.md` updated for:
+  - `Debug Stream` characteristic
+  - expanded `Device Command`
+  - live `Device Status`
+- `payload_contracts.md` updated for:
+  - `Device Command` schemas
+  - richer `Device Status`
+  - `RX Packet` as TNC2 text
+  - `Debug Stream` text payload
+- Added `docs/18_ios_app_architecture.md`
+- Updated MVP docs and gate notes to include the iPhone app workstream and protocol-alignment requirement
+
+### Validation status
+
+- Firmware builds with the new protocol additions.
+- Firmware was flashed successfully to the current prototype on `/dev/cu.usbmodem111101`; serial output after flash confirmed the main RX pipeline was running.
+- Desktop app alignment is source-complete, and Python telemetry tests still pass locally (`43 passed`), but real BLE validation from this host is still pending.
+- iPhone app scaffold is source-complete; XcodeGen project generation and iOS Simulator build succeeded.
+- Physical-device iPhone build now succeeds on this machine with local development signing, but install/launch and BLE runtime validation are still pending.
+
+### Immediate next action for the next agent
+
+1. Install and launch the iPhone app on a paired phone from the generated Xcode project.
+2. Validate on hardware:
+   - connect/disconnect
+   - APRS RX list
+   - GPS status
+   - TX request / TX result flow
+   - `radio_set`
+   - debug stream toggle
+3. Re-run desktop BLE validation against the same firmware build and confirm the new debug/status characteristics enumerate and behave correctly.

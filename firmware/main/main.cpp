@@ -35,6 +35,7 @@
 #include "pakt/AfskModulator.h"
 #include "pakt/Aprs.h"
 #include "pakt/Sa818Radio.h"
+#include "pakt/Telemetry.h"
 #include "NvsStorage.h"
 #include "Sa818UartTransport.h"
 #include "driver/gpio.h"
@@ -45,6 +46,7 @@
 #include "esp_psram.h"
 #include <atomic>
 #include <cinttypes>
+#include <cstdarg>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -66,8 +68,11 @@ static pakt::PttWatchdog *g_ptt_watchdog = nullptr;
 // Both are read by aprs_task (afsk_tx_frame).  Written once; no mutex needed.
 static pakt::Sa818Radio  *g_radio        = nullptr;
 static i2s_chan_handle_t  g_i2s_tx_chan  = nullptr;
+static i2c_master_bus_handle_t g_shared_i2c_bus = nullptr;
 
 static constexpr uint32_t kAudioSampleRateHz = pakt::benchcfg::kAudioSampleRateHz;
+static constexpr bool kVerboseRuntimeLogs =
+    pakt::benchcfg::kLogVerbosity == pakt::benchcfg::LogVerbosity::Verbose;
 
 // Rolling 1-second RX peak absolute value, updated by audio_task's demod loop.
 // Read by sa818_bench Stage 6 (RX audio capture) via a non-capturing lambda.
@@ -80,6 +85,37 @@ static std::atomic<int32_t>  g_rx_peak_abs{0};
 //   g_demod_fcs_rejects: frames assembled but CRC failed (> 0 means near-decode)
 static std::atomic<uint32_t> g_demod_flags{0};
 static std::atomic<uint32_t> g_demod_fcs_rejects{0};
+static std::atomic<uint32_t> g_rx_packet_count{0};
+static std::atomic<uint32_t> g_tx_packet_count{0};
+static std::atomic<uint32_t> g_tx_error_count{0};
+static std::atomic<uint32_t> g_rx_error_count{0};
+static std::atomic<uint32_t> g_last_rx_frame_ms{0};
+static std::atomic<bool>     g_debug_stream_enabled{false};
+
+enum class RuntimeRadioState : uint8_t {
+    Idle = 0,
+    Rx,
+    Tx,
+    Error,
+};
+
+static std::atomic<RuntimeRadioState> g_runtime_radio_state{RuntimeRadioState::Idle};
+static std::atomic<uint32_t> g_radio_rx_freq_hz{144390000U};
+static std::atomic<uint32_t> g_radio_tx_freq_hz{144390000U};
+static std::atomic<uint8_t>  g_radio_squelch{1};
+static std::atomic<uint8_t>  g_radio_volume{4};
+static std::atomic<bool>     g_radio_wide_band{true};
+
+static std::atomic<bool>     g_gps_fix_valid{false};
+static std::atomic<double>   g_gps_lat_deg{0.0};
+static std::atomic<double>   g_gps_lon_deg{0.0};
+static std::atomic<float>    g_gps_alt_m{0.0f};
+static std::atomic<float>    g_gps_speed_kmh{0.0f};
+static std::atomic<float>    g_gps_course_deg{0.0f};
+static std::atomic<uint8_t>  g_gps_sats_used{0};
+static std::atomic<uint8_t>  g_gps_fix_quality{0};
+static std::atomic<uint32_t> g_gps_timestamp_s{0};
+static std::atomic<bool>     g_gps_transport_i2c{false};
 
 // Enhanced RX signal diagnostics, published by audio_task every ~1 s.
 //   g_rx_mean_abs  : mean |sample| in last 1 s window (0-32767 scale).
@@ -171,6 +207,13 @@ struct Ax25RxQueue {
         *out_len = s.len;
         tail_.store(t + 1, std::memory_order_release);
         return true;
+    }
+
+    uint8_t size() const {
+        const uint32_t h = head_.load(std::memory_order_acquire);
+        const uint32_t t = tail_.load(std::memory_order_acquire);
+        const uint32_t depth = h - t;
+        return static_cast<uint8_t>(depth > kDepth ? kDepth : depth);
     }
 };
 
@@ -382,6 +425,180 @@ static void dump_rx_record_wav(pakt::PttWatchdog *watchdog = nullptr)
     ESP_LOGI("aprs_bench", "RX recorder dump complete.");
 }
 
+namespace {
+
+const char *skip_json_string(const char *p)
+{
+    if (!p || *p != '"') return nullptr;
+    ++p;
+    while (*p) {
+        if (*p == '\\') {
+            ++p;
+            if (!*p) return nullptr;
+            ++p;
+        } else if (*p == '"') {
+            return p + 1;
+        } else {
+            ++p;
+        }
+    }
+    return nullptr;
+}
+
+const char *json_find_value(const char *json, const char *key)
+{
+    if (!json || !key) return nullptr;
+    const size_t key_len = std::strlen(key);
+    const char *p = json;
+    while (*p) {
+        while (*p && *p != '"') ++p;
+        if (!*p) break;
+        const char *key_start = p + 1;
+        if (std::strncmp(key_start, key, key_len) == 0 && key_start[key_len] == '"') {
+            p = key_start + key_len + 1;
+            while (*p == ' ' || *p == '\t') ++p;
+            if (*p != ':') continue;
+            ++p;
+            while (*p == ' ' || *p == '\t') ++p;
+            return p;
+        }
+        p = skip_json_string(p);
+        if (!p) return nullptr;
+    }
+    return nullptr;
+}
+
+bool json_extract_string(const char *p, char *out, size_t max_out)
+{
+    if (!p || *p != '"' || !out || max_out == 0) return false;
+    ++p;
+    size_t n = 0;
+    while (*p) {
+        if (*p == '\\') {
+            ++p;
+            if (!*p) return false;
+            if (n < max_out - 1) out[n++] = *p;
+            ++p;
+        } else if (*p == '"') {
+            out[n] = '\0';
+            return true;
+        } else {
+            if (n < max_out - 1) out[n++] = *p;
+            ++p;
+        }
+    }
+    return false;
+}
+
+bool json_extract_int(const char *p, int *out)
+{
+    if (!p || !out) return false;
+    bool neg = false;
+    if (*p == '-') { neg = true; ++p; }
+    if (*p < '0' || *p > '9') return false;
+    int val = 0;
+    while (*p >= '0' && *p <= '9') {
+        val = val * 10 + (*p - '0');
+        ++p;
+    }
+    *out = neg ? -val : val;
+    return true;
+}
+
+bool json_extract_bool(const char *p, bool *out)
+{
+    if (!p || !out) return false;
+    if (std::strncmp(p, "true", 4) == 0) {
+        *out = true;
+        return true;
+    }
+    if (std::strncmp(p, "false", 5) == 0) {
+        *out = false;
+        return true;
+    }
+    return false;
+}
+
+void debug_stream_vprintf(const char *category, const char *fmt, va_list ap)
+{
+    if (!g_debug_stream_enabled.load(std::memory_order_relaxed)) return;
+    char line[220];
+    int prefix_n = std::snprintf(line, sizeof(line), "[%s] ", category ? category : "debug");
+    if (prefix_n < 0 || static_cast<size_t>(prefix_n) >= sizeof(line)) return;
+    std::vsnprintf(line + prefix_n, sizeof(line) - static_cast<size_t>(prefix_n), fmt, ap);
+    pakt::BleServer::instance().notify_debug(
+        reinterpret_cast<const uint8_t *>(line), std::strlen(line));
+}
+
+void debug_stream_printf(const char *category, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    debug_stream_vprintf(category, fmt, ap);
+    va_end(ap);
+}
+
+void publish_device_status(uint32_t now_ms)
+{
+    pakt::DeviceStatus status{};
+    const bool connected = pakt::BleServer::instance().is_connected();
+    RuntimeRadioState radio_state = g_runtime_radio_state.load(std::memory_order_relaxed);
+    if (radio_state == RuntimeRadioState::Idle &&
+        (now_ms - g_last_rx_frame_ms.load(std::memory_order_relaxed)) < 2000u) {
+        radio_state = RuntimeRadioState::Rx;
+    }
+    switch (radio_state) {
+        case RuntimeRadioState::Idle:  status.radio_state = pakt::RadioState::IDLE; break;
+        case RuntimeRadioState::Rx:    status.radio_state = pakt::RadioState::RX; break;
+        case RuntimeRadioState::Tx:    status.radio_state = pakt::RadioState::TX; break;
+        case RuntimeRadioState::Error: status.radio_state = pakt::RadioState::ERROR; break;
+        default:                       status.radio_state = pakt::RadioState::ERROR; break;
+    }
+    status.ble_bonded = pakt::BleServer::instance().is_bonded();
+    status.ble_encrypted = connected && pakt::BleServer::instance().is_encrypted();
+    status.gps_fix = g_gps_fix_valid.load(std::memory_order_relaxed);
+    status.pending_tx_count = g_aprs_ctx
+        ? static_cast<uint8_t>(g_aprs_ctx->pending_tx_count())
+        : 0;
+    status.rx_queue_depth = g_rx_ax25_queue.size();
+    status.rx_freq_hz = g_radio_rx_freq_hz.load(std::memory_order_relaxed);
+    status.tx_freq_hz = g_radio_tx_freq_hz.load(std::memory_order_relaxed);
+    status.squelch = g_radio_squelch.load(std::memory_order_relaxed);
+    status.volume = g_radio_volume.load(std::memory_order_relaxed);
+    status.wide_band = g_radio_wide_band.load(std::memory_order_relaxed);
+    status.debug_enabled = g_debug_stream_enabled.load(std::memory_order_relaxed);
+    status.uptime_s = now_ms / 1000u;
+
+    char buf[pakt::kTelemetryJsonMaxLen];
+    const size_t n = status.to_json(buf, sizeof(buf));
+    if (n > 0) {
+        pakt::BleServer::instance().notify_status(
+            reinterpret_cast<const uint8_t *>(buf), n);
+    }
+}
+
+void publish_system_telemetry(uint32_t now_ms)
+{
+    pakt::SysTelem sys{};
+    sys.free_heap_bytes = esp_get_free_heap_size();
+    sys.min_free_heap_bytes = esp_get_minimum_free_heap_size();
+    sys.cpu_load_pct = 0;
+    sys.tx_packet_count = g_tx_packet_count.load(std::memory_order_relaxed);
+    sys.rx_packet_count = g_rx_packet_count.load(std::memory_order_relaxed);
+    sys.tx_error_count = g_tx_error_count.load(std::memory_order_relaxed);
+    sys.rx_error_count = g_rx_error_count.load(std::memory_order_relaxed);
+    sys.uptime_s = now_ms / 1000u;
+
+    char buf[pakt::kTelemetryJsonMaxLen];
+    const size_t n = sys.to_json(buf, sizeof(buf));
+    if (n > 0) {
+        pakt::BleServer::instance().notify_system(
+            reinterpret_cast<const uint8_t *>(buf), n);
+    }
+}
+
+} // namespace
+
 #define PAKT_FIRMWARE_VERSION "0.1.0"
 
 // ── Forward declarations ──────────────────────────────────────────────────────
@@ -557,6 +774,7 @@ static void radio_task(void *arg)
 
     if (!radio.init()) {
         ESP_LOGE("radio", "SA818 init failed – radio unavailable; PTT remains off");
+        g_runtime_radio_state.store(RuntimeRadioState::Error, std::memory_order_relaxed);
         // Watchdog safe-off callback stays as direct GPIO lambda (safe).
         for (;;) { vTaskDelay(pdMS_TO_TICKS(5000)); }
     }
@@ -565,6 +783,12 @@ static void radio_task(void *arg)
 
     // Set APRS frequency (144.390 MHz simplex, 25 kHz wide, squelch 1).
     radio.set_freq(144390000U, 144390000U);
+    g_radio_rx_freq_hz.store(radio.rx_freq_hz(), std::memory_order_relaxed);
+    g_radio_tx_freq_hz.store(radio.tx_freq_hz(), std::memory_order_relaxed);
+    g_radio_squelch.store(radio.squelch(), std::memory_order_relaxed);
+    g_radio_volume.store(radio.volume(), std::memory_order_relaxed);
+    g_radio_wide_band.store(radio.wide_band(), std::memory_order_relaxed);
+    g_runtime_radio_state.store(RuntimeRadioState::Idle, std::memory_order_relaxed);
 
     // Update watchdog safe-off to go through driver (cleaner state tracking).
     // The direct GPIO lambda remains registered until this point to guard init().
@@ -817,7 +1041,43 @@ static void i2c_scan_bus(i2c_master_bus_handle_t bus)
 
 static bool i2c_probe_addr(i2c_master_bus_handle_t bus, uint8_t addr)
 {
-    return i2c_master_probe(bus, addr, 10) == ESP_OK;
+    return i2c_master_probe(bus, addr, 30) == ESP_OK;
+}
+
+static bool gps_ddc_read_reg(i2c_master_dev_handle_t dev, uint8_t reg,
+                             uint8_t *dst, size_t len)
+{
+    if (!dev || !dst || len == 0) return false;
+    return i2c_master_transmit_receive(dev, &reg, 1, dst, len, 100) == ESP_OK;
+}
+
+static bool gps_ddc_read_available(i2c_master_dev_handle_t dev, uint16_t *out)
+{
+    if (!out) return false;
+
+    uint8_t buf[2] = {};
+    if (!gps_ddc_read_reg(dev, 0xFD, buf, sizeof(buf))) return false;
+
+    const uint16_t little_endian = static_cast<uint16_t>(buf[0]) |
+                                   (static_cast<uint16_t>(buf[1]) << 8);
+    const uint16_t big_endian    = static_cast<uint16_t>(buf[1]) |
+                                   (static_cast<uint16_t>(buf[0]) << 8);
+
+    // Prefer the sane interpretation for a small FIFO count. This keeps the
+    // code resilient if modules or docs disagree on the adjacent byte order.
+    if (little_endian <= 1024) {
+        *out = little_endian;
+    } else if (big_endian <= 1024) {
+        *out = big_endian;
+    } else {
+        *out = little_endian;
+    }
+    return true;
+}
+
+static bool gps_ddc_read_stream(i2c_master_dev_handle_t dev, uint8_t *dst, size_t len)
+{
+    return gps_ddc_read_reg(dev, 0xFF, dst, len);
 }
 
 struct AudioClockPlan {
@@ -1013,6 +1273,11 @@ static void audio_pipeline_run()
     // ── I2C master bus ────────────────────────────────────────────────────────
     i2c_master_bus_handle_t i2c_bus = nullptr;
     {
+        // Normal product logs should stay focused on meaningful radio/BLE/app
+        // activity; low-level I2C driver chatter is only useful in verbose
+        // bench/debug builds.
+        esp_log_level_set("i2c.master", kVerboseRuntimeLogs ? ESP_LOG_WARN : ESP_LOG_NONE);
+
         // Feather ESP32-S3 uses GPIO7 to enable QT/STEMMA power and pull-ups.
         gpio_config_t i2c_power_cfg = {};
         i2c_power_cfg.pin_bit_mask = (1ULL << GPIO_NUM_7);
@@ -1034,10 +1299,13 @@ static void audio_pipeline_run()
             ESP_LOGE("audio", "I2C master bus init failed");
             return;
         }
+        g_shared_i2c_bus = i2c_bus;
 
         // Single I2C scan before MCLK to log bus state.
         // (Repeated 35 s scan disabled for focused RX test to save boot time.)
         i2c_scan_bus(i2c_bus);
+        ESP_LOGI("gps", "Boot I2C GPS probe @0x42: %s",
+                 i2c_probe_addr(i2c_bus, 0x42) ? "present" : "not found");
     }
 
     // ── I2S full-duplex channel (ESP32-S3 master, SGTL5000 slave) ────────────
@@ -1116,7 +1384,7 @@ static void audio_pipeline_run()
         i2c_device_config_t cfg = {};
         cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
         cfg.device_address  = codec_addr;
-        cfg.scl_speed_hz    = 400000;
+        cfg.scl_speed_hz    = 100000;
         if (i2c_master_bus_add_device(i2c_bus, &cfg, &sgtl_dev) != ESP_OK) {
             ESP_LOGE("audio", "SGTL5000 I2C device add failed");
             return;
@@ -1147,8 +1415,16 @@ static void audio_pipeline_run()
             // Log every decoded frame so bench work can see demod activity.
             ESP_LOGI("audio", "AFSK: decoded AX.25 frame (%u bytes) → queue",
                      static_cast<unsigned>(len));
+            g_rx_packet_count.fetch_add(1, std::memory_order_relaxed);
+            g_last_rx_frame_ms.store(
+                static_cast<uint32_t>(esp_timer_get_time() / 1000),
+                std::memory_order_relaxed);
+            debug_stream_printf("aprs_rx", "decoded frame len=%u",
+                                static_cast<unsigned>(len));
             if (!g_rx_ax25_queue.push(frame, len)) {
                 ESP_LOGW("audio", "RX AX.25 queue full – frame dropped");
+                g_rx_error_count.fetch_add(1, std::memory_order_relaxed);
+                debug_stream_printf("aprs_rx", "queue full, frame dropped");
             }
         });
 
@@ -1341,6 +1617,7 @@ static void audio_pipeline_run()
                 const auto ds = demod.stats();
                 g_demod_flags.store(ds.flags, std::memory_order_relaxed);
                 g_demod_fcs_rejects.store(ds.fcs_rejects, std::memory_order_relaxed);
+                const uint32_t rx_pkts = g_rx_packet_count.load(std::memory_order_relaxed);
 
                 // Apply ADC gain change if requested by bench sweep.
                 const uint8_t req_gain =
@@ -1359,24 +1636,44 @@ static void audio_pipeline_run()
                     }
                 }
 
-                if constexpr (pakt::benchcfg::kRxLogChannelStats &&
-                              !pakt::benchcfg::kQuietCaptureMode) {
-                    ESP_LOGI("audio",
-                             "RX channel stats: L(mean=%u peak=%d) R(mean=%u peak=%d) mono(mean=%u peak=%d clips=%u)",
-                             rx_window_samples ? (rx_left_abs_sum / rx_window_samples) : 0u,
-                             rx_left_peak,
-                             rx_window_samples ? (rx_right_abs_sum / rx_window_samples) : 0u,
-                             rx_right_peak,
-                             rx_window_samples ? (rx_window_abs_sum / rx_window_samples) : 0u,
-                             rx_window_peak,
-                             rx_window_clips);
-                }
+                if constexpr (!pakt::benchcfg::kQuietCaptureMode &&
+                              (pakt::benchcfg::kEnableAudioBench ||
+                               pakt::benchcfg::kEnableAprsStageBRxGainSweep ||
+                               pakt::benchcfg::kEnableAprsStageCRxRecord)) {
+                    static uint32_t s_last_flags = 0;
+                    static uint32_t s_last_fcs   = 0;
+                    static uint32_t s_last_pkts  = 0;
 
-                if constexpr (!pakt::benchcfg::kQuietCaptureMode) {
-                    ESP_LOGI("audio",
-                             "TONE eng: 1200Hz=%.5f 2200Hz=%.5f  (AFSK likely present if either > 0.002)",
-                             static_cast<double>(max_g1200),
-                             static_cast<double>(max_g2200));
+                    const bool interesting =
+                        rx_window_peak > 500 ||
+                        max_g1200 > 0.002f ||
+                        max_g2200 > 0.002f ||
+                        ds.flags != s_last_flags ||
+                        ds.fcs_rejects != s_last_fcs ||
+                        rx_pkts != s_last_pkts;
+
+                    if (interesting) {
+                        if constexpr (pakt::benchcfg::kRxLogChannelStats) {
+                            ESP_LOGI("audio",
+                                     "RX channel stats: L(mean=%u peak=%d) R(mean=%u peak=%d) mono(mean=%u peak=%d clips=%u)",
+                                     rx_window_samples ? (rx_left_abs_sum / rx_window_samples) : 0u,
+                                     rx_left_peak,
+                                     rx_window_samples ? (rx_right_abs_sum / rx_window_samples) : 0u,
+                                     rx_right_peak,
+                                     rx_window_samples ? (rx_window_abs_sum / rx_window_samples) : 0u,
+                                     rx_window_peak,
+                                     rx_window_clips);
+                        }
+
+                        ESP_LOGI("audio",
+                                 "TONE eng: 1200Hz=%.5f 2200Hz=%.5f",
+                                 static_cast<double>(max_g1200),
+                                 static_cast<double>(max_g2200));
+                    }
+
+                    s_last_flags = ds.flags;
+                    s_last_fcs   = ds.fcs_rejects;
+                    s_last_pkts  = rx_pkts;
                 }
 
                 rx_window_peak    = 0;
@@ -1425,6 +1722,7 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
         ESP_LOGW("aprs", "afsk_tx: pipeline not ready (radio=%s i2s=%s)",
                  g_radio       ? "ok" : "null",
                  g_i2s_tx_chan ? "ok" : "null");
+        g_tx_error_count.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
 
@@ -1435,13 +1733,16 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
         ESP_LOGE("aprs", "afsk_tx: modulation failed (ax25_len=%u, buf=%u)",
                  static_cast<unsigned>(len),
                  static_cast<unsigned>(kAfskMaxPcmSamples));
+        g_tx_error_count.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
 
     if (!g_radio->ptt(true)) {
         ESP_LOGE("aprs", "afsk_tx: PTT assert failed");
+        g_tx_error_count.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
+    g_runtime_radio_state.store(RuntimeRadioState::Tx, std::memory_order_relaxed);
 
     // SA818 TX path ramp-up: allow PA and squelch to settle.
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -1490,8 +1791,16 @@ static bool afsk_tx_frame(const uint8_t *ax25, size_t len)
     vTaskDelay(pdMS_TO_TICKS(drain_ms));
 
     g_radio->ptt(false);
+    g_runtime_radio_state.store(RuntimeRadioState::Idle, std::memory_order_relaxed);
 
     bool ok = (err == ESP_OK) && (bytes_written == n_samples * sizeof(int16_t));
+    if (ok) {
+        g_tx_packet_count.fetch_add(1, std::memory_order_relaxed);
+        debug_stream_printf("aprs_tx", "TX frame ok len=%u", static_cast<unsigned>(len));
+    } else {
+        g_tx_error_count.fetch_add(1, std::memory_order_relaxed);
+        debug_stream_printf("aprs_tx", "TX frame failed len=%u", static_cast<unsigned>(len));
+    }
     ESP_LOGI("aprs", "afsk_tx: %s (%u samples, %u ms)",
              ok ? "ok" : "FAIL",
              static_cast<unsigned>(n_samples),
@@ -2256,6 +2565,8 @@ static void aprs_task(void *arg)
             static_cast<uint32_t>(esp_timer_get_time() / 1000);
         ctx.tick(now_ms);
         watchdog.heartbeat(now_ms);   // signal aprs_task is alive
+        publish_device_status(now_ms);
+        publish_system_telemetry(now_ms);
 
         // Drain decoded AX.25 frames from the audio pipeline (AfskDemodulator →
         // Ax25RxQueue) and forward to all BLE clients.
@@ -2267,18 +2578,16 @@ static void aprs_task(void *arg)
                 // Decode once; result is used for TNC2 logging, ack detection,
                 // and BLE forwarding below.
                 pakt::ax25::Frame rx_frame;
+                char tnc2_log[256] = "<decode failed>";
                 const bool decoded =
                     pakt::ax25::decode(ax25_frame, ax25_len, rx_frame);
 
                 // Log as TNC2 for serial bench monitoring.
-                {
-                    char tnc2_log[256] = "<decode failed>";
-                    if (decoded) {
-                        pakt::ax25::to_tnc2(rx_frame, tnc2_log, sizeof(tnc2_log));
-                    }
-                    ESP_LOGI("aprs", "RX packet: %s  (%u bytes)",
-                             tnc2_log, static_cast<unsigned>(ax25_len));
+                if (decoded) {
+                    pakt::ax25::to_tnc2(rx_frame, tnc2_log, sizeof(tnc2_log));
                 }
+                ESP_LOGI("aprs", "RX packet: %s  (%u bytes)",
+                         tnc2_log, static_cast<unsigned>(ax25_len));
 
                 // ── APRS message-ack detection ────────────────────────────────
                 // APRS ack format (APRS 1.01 §5.8):
@@ -2326,8 +2635,12 @@ static void aprs_task(void *arg)
                     }
                 }
 
-                // 1. Native rx_packet notify (PAKT BLE clients, e.g. desktop app)
-                pakt::BleServer::instance().notify_rx_packet(ax25_frame, ax25_len);
+                // 1. Native rx_packet notify (PAKT BLE clients, e.g. desktop/iOS app)
+                //    Native clients consume human-readable TNC2 monitor strings.
+                if (!pakt::BleServer::instance().notify_rx_packet(
+                        reinterpret_cast<const uint8_t *>(tnc2_log), std::strlen(tnc2_log))) {
+                    ESP_LOGW("aprs", "notify_rx_packet dropped (not connected or CCCD not subscribed)");
+                }
 
                 // 2. KISS RX notify (KISS TNC clients, e.g. APRSdroid / Xastir)
                 //    KissFramer::encode adds FEND delimiters and byte-escaping.
@@ -2371,30 +2684,54 @@ static void gps_task(void *arg)
 {
     // Step 5: NMEA parser + stale-fix management (FW-005)
     //
-    // UART2 receives the NEO-M9N NMEA stream; bytes are fed one at a time into
+    // Prefer the current Feather STEMMA/QT wiring: u-blox DDC/I2C on the shared
+    // I2C bus (0x42).  UART2 remains as a fallback for older point-to-point
+    // wiring on GPIO17/GPIO18.  Incoming bytes are fed one at a time into
     // NmeaParser which tracks GPRMC/GPGGA and stale-fix state.
-    // GPS telemetry is published via BleServer::notify_gps() at 1 Hz when a
-    // valid fix is present and a BLE client is subscribed.
+    // GPS telemetry is published via BleServer::notify_gps() at 1 Hz even when
+    // there is no valid fix yet so the app can still show "GPS alive, no lock".
     //
-    // Pin mapping (hardware/prototyping_wiring.md):
+    // Fallback UART pin mapping:
     //   GPIO17 → M9N RXD  (GPS_RX_CTRL, ESP TX for UBX config commands)
     //   GPIO18 → M9N TXD  (GPS_TX_NMEA, NMEA sentences to ESP RX)
     //
-    // Baud rate: NEO-M9N factory default is 38400 bps.
     // If no NMEA bytes arrive, GPS stays in the "no fix" state — safe no-op.
 
     static constexpr uart_port_t kGpsUartPort = UART_NUM_2;
     static constexpr int         kGpsTxPin    = 17;   // ESP TX → M9N RXD
     static constexpr int         kGpsRxPin    = 18;   // M9N TXD → ESP RX
     static constexpr int         kGpsBaud     = 38400; // NEO-M9N factory default
+    static constexpr uint8_t     kGpsI2cAddr  = 0x42;  // u-blox DDC 7-bit address
     static constexpr uint32_t    kStaleMs     = 5000;  // mark stale after 5 s silence
     static constexpr uint32_t    kTickMs      = 100;   // task period
     static constexpr uint32_t    kPublishMs   = 1000;  // publish GPS telemetry at 1 Hz
+    static constexpr uint32_t    kDiagMs      = 15000; // debug heartbeat / reprobe cadence
 
     ESP_LOGI("gps", "task started (FW-005)");
 
-    // ── UART2 init for NEO-M9N NMEA stream ───────────────────────────────────
-    {
+    i2c_master_dev_handle_t gps_i2c_dev = nullptr;
+    bool                    use_i2c     = false;
+
+    for (int wait = 0; wait < 100 && g_shared_i2c_bus == nullptr; ++wait) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    if (g_shared_i2c_bus != nullptr && i2c_probe_addr(g_shared_i2c_bus, kGpsI2cAddr)) {
+        i2c_device_config_t cfg = {};
+        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        cfg.device_address  = kGpsI2cAddr;
+        cfg.scl_speed_hz    = 100000;
+        if (i2c_master_bus_add_device(g_shared_i2c_bus, &cfg, &gps_i2c_dev) == ESP_OK) {
+            use_i2c = true;
+            g_gps_transport_i2c.store(true, std::memory_order_relaxed);
+            ESP_LOGI("gps", "Using I2C/DDC GPS on shared bus @ 0x%02X", kGpsI2cAddr);
+        } else {
+            ESP_LOGW("gps", "GPS detected on I2C @ 0x%02X but add_device failed; using UART fallback",
+                     kGpsI2cAddr);
+        }
+    }
+
+    if (!use_i2c) {
         const uart_config_t uart_cfg = {
             .baud_rate  = kGpsBaud,
             .data_bits  = UART_DATA_8_BITS,
@@ -2420,13 +2757,86 @@ static void gps_task(void *arg)
             ESP_LOGW("gps", "uart_set_pin(tx=GPIO%d rx=GPIO%d) failed: %s",
                      kGpsTxPin, kGpsRxPin, esp_err_to_name(err));
         }
-        ESP_LOGI("gps", "UART%d ready: tx=GPIO%d rx=GPIO%d baud=%d",
+        g_gps_transport_i2c.store(false, std::memory_order_relaxed);
+        ESP_LOGI("gps", "Using UART%d fallback: tx=GPIO%d rx=GPIO%d baud=%d",
                  static_cast<int>(kGpsUartPort), kGpsTxPin, kGpsRxPin, kGpsBaud);
     }
 
     pakt::NmeaParser parser;
     uint32_t last_valid_ms  = 0;
     uint32_t last_publish_ms = 0;
+    uint32_t last_diag_ms    = 0;
+    uint32_t i2c_backoff_until_ms = 0;
+    uint32_t last_i2c_error_log_ms = 0;
+    char     nmea_line[96]  = {};
+    size_t   nmea_line_pos  = 0;
+    uint32_t sentence_count = 0;
+    uint32_t last_sentence_log_ms = 0;
+    uint32_t bytes_seen_since_diag = 0;
+
+    auto try_switch_to_i2c = [&]() -> bool {
+        if (use_i2c || g_shared_i2c_bus == nullptr) return false;
+        if (!i2c_probe_addr(g_shared_i2c_bus, kGpsI2cAddr)) return false;
+
+        i2c_device_config_t cfg = {};
+        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        cfg.device_address  = kGpsI2cAddr;
+        cfg.scl_speed_hz    = 100000;
+
+        i2c_master_dev_handle_t new_dev = nullptr;
+        if (i2c_master_bus_add_device(g_shared_i2c_bus, &cfg, &new_dev) != ESP_OK) {
+            ESP_LOGW("gps", "I2C GPS probe @0x%02X present but add_device failed", kGpsI2cAddr);
+            return false;
+        }
+
+        gps_i2c_dev = new_dev;
+        use_i2c = true;
+        g_gps_transport_i2c.store(true, std::memory_order_relaxed);
+        ESP_LOGI("gps", "Switched GPS transport to I2C/DDC @ 0x%02X", kGpsI2cAddr);
+        debug_stream_printf("gps", "switched transport to i2c @0x%02X", kGpsI2cAddr);
+        return true;
+    };
+
+    auto handle_gps_byte = [&](uint8_t byte, uint32_t now_ms) {
+        const char c = static_cast<char>(byte);
+
+        if (c == '$') {
+            nmea_line[0] = '$';
+            nmea_line_pos = 1;
+        } else if (c == '\r' || c == '\n') {
+            if (nmea_line_pos > 1) {
+                nmea_line[nmea_line_pos] = '\0';
+                ++sentence_count;
+                if (kVerboseRuntimeLogs &&
+                    (sentence_count <= 3 || (now_ms - last_sentence_log_ms) >= 5000)) {
+                    ESP_LOGI("gps", "NMEA[%lu]: %s",
+                             static_cast<unsigned long>(sentence_count), nmea_line);
+                    debug_stream_printf("gps", "nmea[%lu]=%s",
+                                        static_cast<unsigned long>(sentence_count), nmea_line);
+                    last_sentence_log_ms = now_ms;
+                }
+            }
+            nmea_line_pos = 0;
+        } else if (nmea_line_pos > 0 && nmea_line_pos < sizeof(nmea_line) - 1) {
+            nmea_line[nmea_line_pos++] = c;
+        }
+
+        ++bytes_seen_since_diag;
+
+        if (parser.feed(byte)) {
+            last_valid_ms = now_ms;
+            const pakt::GpsTelem &fix = parser.fix();
+            g_gps_fix_valid.store(parser.valid(), std::memory_order_relaxed);
+            g_gps_lat_deg.store(fix.lat_deg, std::memory_order_relaxed);
+            g_gps_lon_deg.store(fix.lon_deg, std::memory_order_relaxed);
+            g_gps_alt_m.store(fix.alt_m, std::memory_order_relaxed);
+            g_gps_speed_kmh.store(fix.speed_kmh, std::memory_order_relaxed);
+            g_gps_course_deg.store(fix.course_deg, std::memory_order_relaxed);
+            g_gps_sats_used.store(fix.sats_used, std::memory_order_relaxed);
+            g_gps_fix_quality.store(fix.fix_quality, std::memory_order_relaxed);
+            g_gps_timestamp_s.store(fix.timestamp_s, std::memory_order_relaxed);
+        }
+    };
 
     for (;;) {
         const uint32_t now_ms = static_cast<uint32_t>(esp_timer_get_time() / 1000);
@@ -2436,28 +2846,89 @@ static void gps_task(void *arg)
             ESP_LOGW("gps", "GPS fix stale (>%lu ms)",
                      static_cast<unsigned long>(kStaleMs));
             parser.mark_stale();
+            g_gps_fix_valid.store(false, std::memory_order_relaxed);
         }
 
-        // ── Drain UART2 → parser ──────────────────────────────────────────────
-        // Non-blocking: process all bytes currently in the RX FIFO.
-        // If the M9N is not physically wired, uart_read_bytes returns 0 — safe.
-        {
+        // ── Drain GPS transport → parser ─────────────────────────────────────
+        if (!use_i2c) {
+            try_switch_to_i2c();
+        }
+
+        if (use_i2c) {
+            if (now_ms >= i2c_backoff_until_ms) {
+                uint16_t avail = 0;
+                if (gps_ddc_read_available(gps_i2c_dev, &avail)) {
+                    if (avail > 0) {
+                        uint8_t buf[64];
+                        const size_t to_read = (avail < sizeof(buf)) ? avail : sizeof(buf);
+                        if (gps_ddc_read_stream(gps_i2c_dev, buf, to_read)) {
+                            for (size_t i = 0; i < to_read; ++i) {
+                                handle_gps_byte(buf[i], now_ms);
+                            }
+                        } else {
+                            i2c_backoff_until_ms = now_ms + 2000;
+                            if (kVerboseRuntimeLogs && (now_ms - last_i2c_error_log_ms) >= 5000) {
+                                ESP_LOGW("gps", "I2C GPS stream read failed; backing off 2000 ms");
+                                last_i2c_error_log_ms = now_ms;
+                            }
+                        }
+                    }
+                } else {
+                    i2c_backoff_until_ms = now_ms + 2000;
+                    if (kVerboseRuntimeLogs && (now_ms - last_i2c_error_log_ms) >= 5000) {
+                        ESP_LOGW("gps", "I2C GPS availability read failed; backing off 2000 ms");
+                        last_i2c_error_log_ms = now_ms;
+                    }
+                }
+            }
+        } else {
             uint8_t byte;
             while (uart_read_bytes(kGpsUartPort, &byte, 1, 0) == 1) {
-                if (parser.feed(byte)) {
-                    last_valid_ms = now_ms;
-                }
+                handle_gps_byte(byte, now_ms);
             }
         }
 
+        // ── Periodic GPS diagnostics / I2C reprobe ──────────────────────────
+        if ((now_ms - last_diag_ms) >= kDiagMs) {
+            if (!use_i2c && g_shared_i2c_bus != nullptr && i2c_probe_addr(g_shared_i2c_bus, kGpsI2cAddr)) {
+                ESP_LOGI("gps", "I2C GPS probe @0x%02X became present after boot", kGpsI2cAddr);
+                debug_stream_printf("gps", "i2c probe became present @0x%02X", kGpsI2cAddr);
+                try_switch_to_i2c();
+            }
+
+            if (kVerboseRuntimeLogs || bytes_seen_since_diag > 0 || sentence_count > 0 ||
+                g_gps_fix_quality.load(std::memory_order_relaxed) > 0) {
+                ESP_LOGI("gps",
+                         "diag: src=%s bytes=%lu sentences=%lu fix=%u sats=%u",
+                         use_i2c ? "i2c" : "uart",
+                         static_cast<unsigned long>(bytes_seen_since_diag),
+                         static_cast<unsigned long>(sentence_count),
+                         static_cast<unsigned>(g_gps_fix_quality.load(std::memory_order_relaxed)),
+                         static_cast<unsigned>(g_gps_sats_used.load(std::memory_order_relaxed)));
+                debug_stream_printf("gps", "diag src=%s bytes=%lu sentences=%lu fix=%u sats=%u",
+                                    use_i2c ? "i2c" : "uart",
+                                    static_cast<unsigned long>(bytes_seen_since_diag),
+                                    static_cast<unsigned long>(sentence_count),
+                                    static_cast<unsigned>(g_gps_fix_quality.load(std::memory_order_relaxed)),
+                                    static_cast<unsigned>(g_gps_sats_used.load(std::memory_order_relaxed)));
+            }
+            bytes_seen_since_diag = 0;
+            last_diag_ms = now_ms;
+        }
+
         // ── Publish GPS telemetry via BLE ─────────────────────────────────────
-        if ((now_ms - last_publish_ms) >= kPublishMs && parser.valid()) {
+        if ((now_ms - last_publish_ms) >= kPublishMs) {
             const pakt::GpsTelem &fix = parser.fix();
             char buf[256];
             size_t n = fix.to_json(buf, sizeof(buf));
             if (n > 0) {
                 pakt::BleServer::instance().notify_gps(
                     reinterpret_cast<const uint8_t *>(buf), n);
+                debug_stream_printf("gps", "src=%s fix=%u sats=%u lat=%.5f lon=%.5f",
+                                    use_i2c ? "i2c" : "uart",
+                                    static_cast<unsigned>(fix.fix_quality),
+                                    static_cast<unsigned>(fix.sats_used),
+                                    fix.lat_deg, fix.lon_deg);
             }
             last_publish_ms = now_ms;
         }
@@ -2496,7 +2967,166 @@ static void ble_task(void *arg)
         }
         return true;   // BLE write accepted regardless of persist outcome
     };
-    handlers.on_command = [](const uint8_t *, size_t) { return true; };
+    handlers.on_command = [](const uint8_t *data, size_t len) -> bool {
+        if (!data || len == 0 || len >= pakt::PayloadValidator::kMaxJsonLen) {
+            ESP_LOGW("ble", "command rejected: invalid length");
+            return false;
+        }
+
+        char json[pakt::PayloadValidator::kMaxJsonLen];
+        std::memcpy(json, data, len);
+        json[len] = '\0';
+
+        const char *cmd_v = json_find_value(json, "cmd");
+        char cmd[32]{};
+        if (!cmd_v || !json_extract_string(cmd_v, cmd, sizeof(cmd))) {
+            ESP_LOGW("ble", "command rejected: missing/invalid cmd");
+            return false;
+        }
+
+        if (std::strcmp(cmd, "debug_stream") == 0) {
+            const char *enabled_v = json_find_value(json, "enabled");
+            bool enabled = false;
+            if (!enabled_v || !json_extract_bool(enabled_v, &enabled)) {
+                ESP_LOGW("ble", "command rejected: debug_stream requires boolean enabled");
+                return false;
+            }
+            g_debug_stream_enabled.store(enabled, std::memory_order_relaxed);
+            // Log only via serial — do NOT call debug_stream_printf here.
+            // This handler runs in the nimble_host task; calling notify_debug
+            // from within a NimBLE callback causes re-entrant ble_gatts_notify_custom
+            // and overflows the nimble_host 4 kB stack.
+            ESP_LOGI("ble", "debug stream %s", enabled ? "enabled" : "disabled");
+            return true;
+        }
+
+        if (std::strcmp(cmd, "radio_set") == 0) {
+            if (!g_radio) {
+                ESP_LOGW("ble", "radio_set rejected: radio not ready");
+                return false;
+            }
+
+            uint32_t rx_hz = g_radio_rx_freq_hz.load(std::memory_order_relaxed);
+            uint32_t tx_hz = g_radio_tx_freq_hz.load(std::memory_order_relaxed);
+            uint8_t squelch = g_radio_squelch.load(std::memory_order_relaxed);
+            uint8_t volume = g_radio_volume.load(std::memory_order_relaxed);
+            bool wide_band = g_radio_wide_band.load(std::memory_order_relaxed);
+            bool freq_changed = false;
+            bool squelch_changed = false;
+            bool volume_changed = false;
+            bool bw_changed = false;
+
+            if (const char *v = json_find_value(json, "freq_hz")) {
+                int freq = 0;
+                if (!json_extract_int(v, &freq) || freq <= 0) return false;
+                rx_hz = static_cast<uint32_t>(freq);
+                tx_hz = static_cast<uint32_t>(freq);
+                freq_changed = true;
+            }
+            if (const char *v = json_find_value(json, "rx_freq_hz")) {
+                int freq = 0;
+                if (!json_extract_int(v, &freq) || freq <= 0) return false;
+                rx_hz = static_cast<uint32_t>(freq);
+                freq_changed = true;
+            }
+            if (const char *v = json_find_value(json, "tx_freq_hz")) {
+                int freq = 0;
+                if (!json_extract_int(v, &freq) || freq <= 0) return false;
+                tx_hz = static_cast<uint32_t>(freq);
+                freq_changed = true;
+            }
+            if (const char *v = json_find_value(json, "squelch")) {
+                int sq = 0;
+                if (!json_extract_int(v, &sq) || sq < 0 || sq > 8) return false;
+                squelch = static_cast<uint8_t>(sq);
+                squelch_changed = true;
+            }
+            if (const char *v = json_find_value(json, "volume")) {
+                int vol = 0;
+                if (!json_extract_int(v, &vol) || vol < 1 || vol > 8) return false;
+                volume = static_cast<uint8_t>(vol);
+                volume_changed = true;
+            }
+            if (const char *v = json_find_value(json, "wide_band")) {
+                if (!json_extract_bool(v, &wide_band)) return false;
+                bw_changed = true;
+            }
+
+            if (!freq_changed && !squelch_changed && !volume_changed && !bw_changed) {
+                ESP_LOGW("ble", "radio_set rejected: no supported fields");
+                return false;
+            }
+
+            if (freq_changed && !g_radio->set_freq(rx_hz, tx_hz)) {
+                ESP_LOGW("ble", "radio_set failed: set_freq");
+                g_runtime_radio_state.store(RuntimeRadioState::Error, std::memory_order_relaxed);
+                return false;
+            }
+            if (squelch_changed && !g_radio->set_squelch(squelch)) {
+                ESP_LOGW("ble", "radio_set failed: set_squelch");
+                return false;
+            }
+            if (bw_changed && !g_radio->set_bandwidth(wide_band)) {
+                ESP_LOGW("ble", "radio_set failed: set_bandwidth");
+                return false;
+            }
+            if (volume_changed && !g_radio->set_volume(volume)) {
+                ESP_LOGW("ble", "radio_set failed: set_volume");
+                return false;
+            }
+
+            g_radio_rx_freq_hz.store(freq_changed ? rx_hz : g_radio->rx_freq_hz(),
+                                     std::memory_order_relaxed);
+            g_radio_tx_freq_hz.store(freq_changed ? tx_hz : g_radio->tx_freq_hz(),
+                                     std::memory_order_relaxed);
+            g_radio_squelch.store(g_radio->squelch(), std::memory_order_relaxed);
+            g_radio_volume.store(g_radio->volume(), std::memory_order_relaxed);
+            g_radio_wide_band.store(g_radio->wide_band(), std::memory_order_relaxed);
+            // Serial log only — do NOT call debug_stream_printf from BLE callback context.
+            ESP_LOGI("radio", "radio_set rx=%lu tx=%lu squelch=%u volume=%u wide=%s",
+                     static_cast<unsigned long>(g_radio_rx_freq_hz.load(std::memory_order_relaxed)),
+                     static_cast<unsigned long>(g_radio_tx_freq_hz.load(std::memory_order_relaxed)),
+                     static_cast<unsigned>(g_radio_squelch.load(std::memory_order_relaxed)),
+                     static_cast<unsigned>(g_radio_volume.load(std::memory_order_relaxed)),
+                     g_radio_wide_band.load(std::memory_order_relaxed) ? "true" : "false");
+            return true;
+        }
+
+        if (std::strcmp(cmd, "beacon_now") == 0) {
+            const auto &cfg = g_device_config.config();
+            uint8_t info_buf[pakt::ax25::kMaxInfoLen];
+            const float lat = static_cast<float>(g_gps_lat_deg.load(std::memory_order_relaxed));
+            const float lon = static_cast<float>(g_gps_lon_deg.load(std::memory_order_relaxed));
+            const size_t info_len = pakt::aprs::encode_position(
+                lat,
+                lon,
+                cfg.aprs_symbol_table,
+                cfg.aprs_symbol_code,
+                cfg.beacon_comment,
+                info_buf,
+                sizeof(info_buf));
+            if (info_len == 0) {
+                ESP_LOGW("ble", "beacon_now failed: encode_position");
+                return false;
+            }
+            pakt::ax25::Frame frame = pakt::aprs::make_ui_frame(cfg.callsign, cfg.ssid);
+            std::memcpy(frame.info, info_buf, info_len);
+            frame.info_len = info_len;
+            uint8_t ax25_buf[pakt::ax25::kMaxEncodedLen];
+            const size_t ax25_len = pakt::ax25::encode(frame, ax25_buf, sizeof(ax25_buf));
+            if (ax25_len == 0) {
+                ESP_LOGW("ble", "beacon_now failed: ax25 encode");
+                return false;
+            }
+            const bool ok = afsk_tx_frame(ax25_buf, ax25_len);
+            // Serial log only — do NOT call debug_stream_printf from BLE callback context.
+            ESP_LOGI("aprs_tx", "beacon_now %s", ok ? "ok" : "failed");
+            return ok;
+        }
+
+        ESP_LOGW("ble", "command rejected: unsupported cmd=%s", cmd);
+        return false;
+    };
     handlers.on_tx_request = [](const uint8_t *data, size_t len) -> bool {
         pakt::TxRequestFields fields;
         if (!pakt::PayloadValidator::validate_tx_request_payload(data, len, &fields)) {

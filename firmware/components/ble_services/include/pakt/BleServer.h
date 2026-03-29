@@ -3,7 +3,7 @@
 // Exposes four BLE services:
 //   0x180A  Device Information Service (standard)
 //   0xA000  APRS Service (config, command, status, RX stream, TX request/result)
-//   0xA020  Device Telemetry Service (GPS, power, system)
+//   0xA020  Device Telemetry Service (GPS, power, system, debug stream)
 //   0xA050  KISS Service (KISS RX notify, KISS TX write — INT-003)
 //
 // Write security policy (architecture contract B):
@@ -85,6 +85,7 @@ public:
     bool notify_gps         (const uint8_t *data, size_t len);
     bool notify_power       (const uint8_t *data, size_t len);
     bool notify_system      (const uint8_t *data, size_t len);
+    bool notify_debug       (const uint8_t *data, size_t len);
 
     // Send a KISS-framed AX.25 frame to subscribed KISS RX clients (INT-003).
     // `data` must be a complete KISS frame (FEND-delimited, escaped).
@@ -93,12 +94,15 @@ public:
 
     bool is_connected() const;
     bool is_bonded()    const;
+    bool is_encrypted() const;
 
     const Handlers &handlers() const;
     const char *device_name() const;
     void set_connected(uint16_t conn_handle, bool bonded);
     void clear_connection();
     void set_bonded(bool bonded);
+    // Called from on_ble_sync after ble_gatts_start() has assigned handles.
+    void sync_handles();
 
 private:
     BleServer() = default;
@@ -122,6 +126,7 @@ private:
     uint16_t h_gps_telem_     = 0;
     uint16_t h_power_telem_   = 0;
     uint16_t h_system_telem_  = 0;
+    uint16_t h_debug_stream_  = 0;
     uint16_t h_kiss_rx_       = 0;   // KISS RX notify handle (INT-003)
     uint16_t h_kiss_tx_       = 0;   // KISS TX write handle (INT-003)
 
@@ -132,6 +137,7 @@ private:
     int64_t last_notify_gps_      = 0;
     int64_t last_notify_power_    = 0;
     int64_t last_notify_system_   = 0;
+    int64_t last_notify_debug_    = 0;
     int64_t last_notify_kiss_rx_  = 0;
 
     // Rolling msg_id counter for INT-002 chunking of KISS RX notifies.

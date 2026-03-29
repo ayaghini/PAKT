@@ -24,15 +24,29 @@ size_t DeviceStatus::to_json(char *buf, size_t buf_len) const {
     int n = std::snprintf(buf, buf_len,
         "{\"radio\":\"%s\","
         "\"bonded\":%s,"
+        "\"encrypted\":%s,"
         "\"gps_fix\":%s,"
         "\"pending_tx\":%u,"
         "\"rx_queue\":%u,"
+        "\"rx_freq_hz\":%lu,"
+        "\"tx_freq_hz\":%lu,"
+        "\"squelch\":%u,"
+        "\"volume\":%u,"
+        "\"wide_band\":%s,"
+        "\"debug_enabled\":%s,"
         "\"uptime_s\":%lu}",
         radio_state_str(radio_state),
         ble_bonded    ? "true" : "false",
+        ble_encrypted ? "true" : "false",
         gps_fix       ? "true" : "false",
         static_cast<unsigned>(pending_tx_count),
         static_cast<unsigned>(rx_queue_depth),
+        static_cast<unsigned long>(rx_freq_hz),
+        static_cast<unsigned long>(tx_freq_hz),
+        static_cast<unsigned>(squelch),
+        static_cast<unsigned>(volume),
+        wide_band     ? "true" : "false",
+        debug_enabled ? "true" : "false",
         static_cast<unsigned long>(uptime_s)
     );
     return (n > 0 && static_cast<size_t>(n) < buf_len) ? static_cast<size_t>(n) : 0;

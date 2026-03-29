@@ -36,9 +36,16 @@ enum class RadioState : uint8_t {
 struct DeviceStatus {
     RadioState radio_state;
     bool       ble_bonded;         // LE secure connection bonded
+    bool       ble_encrypted;      // true when current BLE link is encrypted
     bool       gps_fix;            // true = valid 2D/3D fix
     uint8_t    pending_tx_count;   // messages in TxScheduler queue
     uint8_t    rx_queue_depth;     // decoded frames waiting for host
+    uint32_t   rx_freq_hz;         // current radio RX frequency
+    uint32_t   tx_freq_hz;         // current radio TX frequency
+    uint8_t    squelch;            // SA818 squelch level 0-8
+    uint8_t    volume;             // SA818 AF volume 1-8
+    bool       wide_band;          // true = 25 kHz, false = 12.5 kHz
+    bool       debug_enabled;      // true when BLE debug stream mirroring is enabled
     uint32_t   uptime_s;           // seconds since boot
 
     // Serialise to JSON.  Returns number of bytes written (excl. NUL), or 0 on overflow.

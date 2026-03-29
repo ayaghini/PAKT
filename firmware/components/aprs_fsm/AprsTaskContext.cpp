@@ -105,4 +105,9 @@ bool AprsTaskContext::notify_ack(const char *ack_msg_id)
     return scheduler_.on_ack_received(ack_msg_id);
 }
 
+size_t AprsTaskContext::pending_tx_count() const
+{
+    return scheduler_.active_count();
+}
+
 } // namespace pakt

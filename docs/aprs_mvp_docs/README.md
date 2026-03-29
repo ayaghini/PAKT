@@ -1,6 +1,6 @@
 # APRS 2m Pocket TNC + Tracker (SA818 + ESP32-S3 + GPS) - MVP Docs
 
-Last updated: 2026-03-27
+Last updated: 2026-03-28
 
 This folder contains the working documentation set for a standalone APRS
 (1200 baud AFSK, AX.25) 2m device that exposes BLE interfaces to desktop and phone clients,
@@ -21,6 +21,7 @@ A pocket device that:
 - Provides BLE configuration and live status
 - Runs from battery and charges over USB-C
 - Supports a Windows desktop BLE test app workflow before phone app rollout
+- Supports an iPhone-only SwiftUI companion app using the same native BLE protocol as the desktop app
 
 ## Contents
 - `docs/01_product_brief.md`
@@ -66,7 +67,7 @@ The bootstrap pack includes:
 - Bench workflow status: blocking bench stages are now selectable through `firmware/main/bench_profile_config.h`, so prototype debug runs can be narrowed to only the needed stages.
 - Interop: KISS-over-BLE is part of MVP and is software-complete enough for hardware validation; third-party client evidence is still pending.
 - APRS message ack handling is now wired into the firmware TX state machine; end-to-end on-air ack validation is still pending.
-- GPS UART integration is now live in firmware on `UART2` (`GPIO17/GPIO18`, `38400` baud), but hardware wiring/fix validation is still pending.
+- GPS integration now prefers the shared Feather I2C/STEMMA bus (`u-blox M9N @ 0x42`) with `UART2` (`GPIO17/GPIO18`, `38400` baud) as a fallback; the shared-I2C GPS path is now working on the current prototype and live GPS telemetry is reaching the app.
 
 ## Documentation split
 - `docs/aprs_mvp_docs/` is the canonical spec, architecture, protocol, and project-status tree.
@@ -83,12 +84,14 @@ The bootstrap pack includes:
 - New coding agent: start with `agent_bootstrap/README.md`
 - Firmware bring-up: read `docs/06_firmware_architecture.md`, `docs/07_audio_i2s_codec_notes.md`, `agent_bootstrap/audit.md`, and `../bench_bringup_checklist.md`
 - Host/app integration: read `docs/05_ble_gatt_spec.md`, `docs/16_kiss_over_ble_spec.md`, `payload_contracts.md`, and the desktop app sources under `app/desktop_test/`
+- iPhone app implementation: start with `docs/18_ios_app_architecture.md`, then `docs/05_ble_gatt_spec.md`, `payload_contracts.md`, and the desktop app sources under `app/desktop_test/`
 
 ## Current status at a glance
 - MVP gate: open
 - Strongest validated RF result so far: APRS TX is proven externally and APRS RX is now proven on-device on the current prototype
+- GPS status: shared-I2C GPS transport and BLE/app telemetry are now working on the current prototype
 - Most important remaining RF work: repeatability, deviation calibration, and end-to-end validation on the corrected firmware baseline
-- Main next verification step: continue MVP hardware validation above the now-working RF stack: BLE/KISS behavior, APRS ack round-trip, GPS UART validation, and safety checks
+- Main next verification step: continue MVP hardware validation above the now-working RF + GPS stack, and deliver the first iPhone operator app against the same BLE protocol surface
 
 ## What this is / is not
 - A practical starting point for hardware + firmware implementation

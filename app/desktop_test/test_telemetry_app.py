@@ -18,8 +18,10 @@ from diagnostics import DiagnosticsStore
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _status(**kw) -> str:
-    defaults = {"radio":"idle","bonded":False,"gps_fix":False,
-                "pending_tx":0,"rx_queue":0,"uptime_s":0}
+    defaults = {"radio":"idle","bonded":False,"encrypted":False,"gps_fix":False,
+                "pending_tx":0,"rx_queue":0,"rx_freq_hz":0,"tx_freq_hz":0,
+                "squelch":0,"volume":0,"wide_band":True,"debug_enabled":False,
+                "uptime_s":0}
     defaults.update(kw)
     return json.dumps(defaults)
 
@@ -68,6 +70,19 @@ class TestDeviceStatusParse:
     def test_summary_contains_radio(self):
         s = DeviceStatus.parse(_status(radio="rx"))
         assert "rx" in s.summary()
+
+    def test_parses_extended_radio_fields(self):
+        s = DeviceStatus.parse(_status(encrypted=True, rx_freq_hz=144390000,
+                                       tx_freq_hz=144390000, squelch=2,
+                                       volume=4, wide_band=False,
+                                       debug_enabled=True))
+        assert s.encrypted is True
+        assert s.rx_freq_hz == 144390000
+        assert s.tx_freq_hz == 144390000
+        assert s.squelch == 2
+        assert s.volume == 4
+        assert s.wide_band is False
+        assert s.debug_enabled is True
 
 
 # ── GpsTelem.parse ────────────────────────────────────────────────────────────
@@ -232,6 +247,12 @@ class TestDiagnosticsStore:
         ds.add_rx_frame("W1AW>APRS:!4000.00N/07400.00W>Hello")
         r = ds.export_dict()
         assert len(r["rx_frames"]) == 1
+
+    def test_export_dict_debug_lines(self):
+        ds = DiagnosticsStore()
+        ds.add_debug_line("[radio] radio_set rx=144390000")
+        r = ds.export_dict()
+        assert r["debug_lines"] == ["[radio] radio_set rx=144390000"]
 
     def test_export_json_writes_valid_json(self, tmp_path):
         ds = self._store_with_samples()

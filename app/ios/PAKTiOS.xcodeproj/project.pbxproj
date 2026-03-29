@@ -1,0 +1,429 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		551270598707C17236357C8A /* BLEManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA0B460DF9CD39AA38C924F /* BLEManager.swift */; };
+		5F038D9B95731366499D77F0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5472B2EF6B1A824220E7D31A /* ContentView.swift */; };
+		9007247DE69C9F531FF947C0 /* PAKTiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6962B5E476E205E49FD01E7F /* PAKTiOSApp.swift */; };
+		D6CE76ACF991275C688044AF /* PAKTiOSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFBF64008B56DF79FD66392F /* PAKTiOSTests.swift */; };
+		F8B72AF88515EC5F8D7D12CB /* BLEProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5034FEBF8A9E06BB7B52031 /* BLEProtocol.swift */; };
+		FEEE9F5722C63BC5B5311F4A /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BF2AE52FF35D9FE9F1FA652 /* Models.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		37A09B556047ED4D0D35A746 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 040DFB2E7008CC3B960A8BF0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1BCEA00D4F2784C47D8BEA88;
+			remoteInfo = PAKTiOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		40A0ED66EFC759B66CC2DB7B /* PAKTiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PAKTiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BF2AE52FF35D9FE9F1FA652 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		4EA0B460DF9CD39AA38C924F /* BLEManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEManager.swift; sourceTree = "<group>"; };
+		5472B2EF6B1A824220E7D31A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		6962B5E476E205E49FD01E7F /* PAKTiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PAKTiOSApp.swift; sourceTree = "<group>"; };
+		B10F4995AD4A456C67ACECDB /* PAKTiOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PAKTiOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5034FEBF8A9E06BB7B52031 /* BLEProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEProtocol.swift; sourceTree = "<group>"; };
+		CFBF64008B56DF79FD66392F /* PAKTiOSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PAKTiOSTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		234654EFB77A6045D63DAE24 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				40A0ED66EFC759B66CC2DB7B /* PAKTiOS.app */,
+				B10F4995AD4A456C67ACECDB /* PAKTiOSTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BD690E2A926334EFD007D7ED /* PAKTiOS */ = {
+			isa = PBXGroup;
+			children = (
+				4EA0B460DF9CD39AA38C924F /* BLEManager.swift */,
+				B5034FEBF8A9E06BB7B52031 /* BLEProtocol.swift */,
+				5472B2EF6B1A824220E7D31A /* ContentView.swift */,
+				4BF2AE52FF35D9FE9F1FA652 /* Models.swift */,
+				6962B5E476E205E49FD01E7F /* PAKTiOSApp.swift */,
+			);
+			path = PAKTiOS;
+			sourceTree = "<group>";
+		};
+		EDE80BE283555FF2F45DE350 /* PAKTiOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				CFBF64008B56DF79FD66392F /* PAKTiOSTests.swift */,
+			);
+			path = PAKTiOSTests;
+			sourceTree = "<group>";
+		};
+		FA8FFCA37DE1586A9E714CB5 = {
+			isa = PBXGroup;
+			children = (
+				BD690E2A926334EFD007D7ED /* PAKTiOS */,
+				EDE80BE283555FF2F45DE350 /* PAKTiOSTests */,
+				234654EFB77A6045D63DAE24 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1BCEA00D4F2784C47D8BEA88 /* PAKTiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 27DED99FCBD2A902FE5A34D0 /* Build configuration list for PBXNativeTarget "PAKTiOS" */;
+			buildPhases = (
+				585DEC20ECB3DBF3DE95807B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PAKTiOS;
+			packageProductDependencies = (
+			);
+			productName = PAKTiOS;
+			productReference = 40A0ED66EFC759B66CC2DB7B /* PAKTiOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		93E93C1F614B29FD55448B4F /* PAKTiOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5CC3FCA479523B45184D1619 /* Build configuration list for PBXNativeTarget "PAKTiOSTests" */;
+			buildPhases = (
+				8C34004E92CEF7B434FC34C0 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A4DAB027FA9E75F9508DC2D4 /* PBXTargetDependency */,
+			);
+			name = PAKTiOSTests;
+			packageProductDependencies = (
+			);
+			productName = PAKTiOSTests;
+			productReference = B10F4995AD4A456C67ACECDB /* PAKTiOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		040DFB2E7008CC3B960A8BF0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1BCEA00D4F2784C47D8BEA88 = {
+						ProvisioningStyle = Automatic;
+					};
+					93E93C1F614B29FD55448B4F = {
+						DevelopmentTeam = 74X5K4W24N;
+					};
+				};
+			};
+			buildConfigurationList = 846B4F60E69794CD10854160 /* Build configuration list for PBXProject "PAKTiOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = FA8FFCA37DE1586A9E714CB5;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 234654EFB77A6045D63DAE24 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1BCEA00D4F2784C47D8BEA88 /* PAKTiOS */,
+				93E93C1F614B29FD55448B4F /* PAKTiOSTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		585DEC20ECB3DBF3DE95807B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				551270598707C17236357C8A /* BLEManager.swift in Sources */,
+				F8B72AF88515EC5F8D7D12CB /* BLEProtocol.swift in Sources */,
+				5F038D9B95731366499D77F0 /* ContentView.swift in Sources */,
+				FEEE9F5722C63BC5B5311F4A /* Models.swift in Sources */,
+				9007247DE69C9F531FF947C0 /* PAKTiOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8C34004E92CEF7B434FC34C0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D6CE76ACF991275C688044AF /* PAKTiOSTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A4DAB027FA9E75F9508DC2D4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1BCEA00D4F2784C47D8BEA88 /* PAKTiOS */;
+			targetProxy = 37A09B556047ED4D0D35A746 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		9B69EC1C8F86E7F4CB2A193A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pakt.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PAKTiOS.app/PAKTiOS";
+			};
+			name = Release;
+		};
+		B920B300B5E1F68BE5EA3D03 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AMWWV3Y9LB;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PAKTiOS;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "PAKTiOS connects to your PAKT APRS device over Bluetooth.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "PAKTiOS connects to your PAKT APRS device over Bluetooth.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.paktradio.ios;
+				PRODUCT_NAME = PAKTiOS;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E167A6E815CB1A771C44A0A2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 74X5K4W24N;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		E87C3FDB3FE8DBCBF7929BAB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 74X5K4W24N;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		ED6146AB089E9C731153B121 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.pakt.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PAKTiOS.app/PAKTiOS";
+			};
+			name = Debug;
+		};
+		F4DA56646D99566EC8C97205 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AMWWV3Y9LB;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PAKTiOS;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "PAKTiOS connects to your PAKT APRS device over Bluetooth.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "PAKTiOS connects to your PAKT APRS device over Bluetooth.";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.paktradio.ios;
+				PRODUCT_NAME = PAKTiOS;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		27DED99FCBD2A902FE5A34D0 /* Build configuration list for PBXNativeTarget "PAKTiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B920B300B5E1F68BE5EA3D03 /* Debug */,
+				F4DA56646D99566EC8C97205 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5CC3FCA479523B45184D1619 /* Build configuration list for PBXNativeTarget "PAKTiOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED6146AB089E9C731153B121 /* Debug */,
+				9B69EC1C8F86E7F4CB2A193A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		846B4F60E69794CD10854160 /* Build configuration list for PBXProject "PAKTiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E87C3FDB3FE8DBCBF7929BAB /* Debug */,
+				E167A6E815CB1A771C44A0A2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 040DFB2E7008CC3B960A8BF0 /* Project object */;
+}

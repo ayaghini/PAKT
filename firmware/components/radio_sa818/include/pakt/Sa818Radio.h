@@ -41,9 +41,15 @@ public:
     bool set_freq(uint32_t rx_hz, uint32_t tx_hz) override;
     bool set_squelch(uint8_t level)               override;
     bool set_volume(uint8_t level);               // AT+DMOSETVOLUME=N, N=1..8
+    bool set_bandwidth(bool wide_band);           // true = 25 kHz, false = 12.5 kHz
     bool set_power(RadioPower power)              override;
     bool ptt(bool on)                             override;
     bool is_transmitting() const                  override { return transmitting_; }
+    uint32_t rx_freq_hz() const                   { return rx_hz_; }
+    uint32_t tx_freq_hz() const                   { return tx_hz_; }
+    uint8_t squelch() const                       { return squelch_; }
+    uint8_t volume() const                        { return volume_; }
+    bool wide_band() const                        { return wide_band_; }
 
 private:
     // Write cmd, read response into resp_buf (null-terminated on success).
@@ -60,6 +66,8 @@ private:
     uint32_t   rx_hz_       = 0;
     uint32_t   tx_hz_       = 0;
     uint8_t    squelch_     = kDefaultSquelch;
+    uint8_t    volume_      = 8;
+    bool       wide_band_   = true;
     RadioPower power_       = RadioPower::Low;
     bool       transmitting_ = false;
     bool       initialized_  = false;

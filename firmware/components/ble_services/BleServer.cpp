@@ -46,6 +46,7 @@ static const ble_uuid128_t uuid_tx_result    = UUID128(pakt::uuids::kTxResult);
 static const ble_uuid128_t uuid_gps_telem    = UUID128(pakt::uuids::kGpsTelemetry);
 static const ble_uuid128_t uuid_power_telem  = UUID128(pakt::uuids::kPowerTelemetry);
 static const ble_uuid128_t uuid_system_telem = UUID128(pakt::uuids::kSystemTelemetry);
+static const ble_uuid128_t uuid_debug_stream = UUID128(pakt::uuids::kDebugStream);
 static const ble_uuid128_t uuid_kiss_rx      = UUID128(pakt::uuids::kKissRx);
 static const ble_uuid128_t uuid_kiss_tx      = UUID128(pakt::uuids::kKissTx);
 static const ble_uuid16_t uuid_dis_svc       = BLE_UUID16_INIT(0x180A);
@@ -77,6 +78,7 @@ static uint16_t g_h_tx_result    = 0;
 static uint16_t g_h_gps_telem    = 0;
 static uint16_t g_h_power_telem  = 0;
 static uint16_t g_h_system_telem = 0;
+static uint16_t g_h_debug_stream = 0;
 static uint16_t g_h_kiss_rx      = 0;
 static uint16_t g_h_kiss_tx      = 0;
 
@@ -147,6 +149,12 @@ static const struct ble_gatt_chr_def telm_chars[] = {
         .access_cb  = telm_access_cb,
         .flags      = BLE_GATT_CHR_F_NOTIFY,
         .val_handle = &g_h_system_telem,
+    },
+    {
+        .uuid       = &uuid_debug_stream.u,
+        .access_cb  = telm_access_cb,
+        .flags      = BLE_GATT_CHR_F_NOTIFY,
+        .val_handle = &g_h_debug_stream,
     },
     { 0 } // terminator
 };
@@ -226,11 +234,18 @@ static pakt::BleChunker g_kiss_tx_chunker(on_kiss_tx_chunk_complete);
 
 // ── Security helper ───────────────────────────────────────────────────────────
 
+// MVP bring-up: accept any encrypted link.
+// iOS with NO_IO Just Works LE SC completes encryption without always persisting a bond
+// (bonded=0 after successful pairing). Requiring bonded here blocks all writes during
+// hardware bring-up. The encryption check still rejects completely unencrypted clients.
+// Full bonded-write-rejection validation is the G3 hardware gate item.
 static bool conn_is_encrypted_and_bonded(uint16_t conn_handle)
 {
     struct ble_gap_conn_desc desc{};
     if (ble_gap_conn_find(conn_handle, &desc) != 0) return false;
-    return desc.sec_state.encrypted && desc.sec_state.bonded;
+    ESP_LOGD(TAG, "sec check: encrypted=%d bonded=%d",
+             (int)desc.sec_state.encrypted, (int)desc.sec_state.bonded);
+    return desc.sec_state.encrypted != 0;
 }
 
 // ── GAP event handler ─────────────────────────────────────────────────────────
@@ -283,6 +298,10 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         if (event->connect.status == 0) {
             ESP_LOGI(TAG, "connected: handle=%d", event->connect.conn_handle);
             srv.set_connected(event->connect.conn_handle, false);
+            // Proactively request encryption so iOS initiates pairing immediately
+            // rather than waiting for an ATT auth-error response (which iOS sometimes
+            // ignores when no prior bond exists).
+            ble_gap_security_initiate(event->connect.conn_handle);
         } else {
             ESP_LOGW(TAG, "connect failed: %d", event->connect.status);
             start_advertising_internal(srv.device_name());
@@ -320,8 +339,13 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg)
         return BLE_GAP_REPEAT_PAIRING_RETRY;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
-        ESP_LOGD(TAG, "subscribe: handle=%d cur_notify=%d",
-                 event->subscribe.attr_handle, event->subscribe.cur_notify);
+        ESP_LOGI(TAG, "subscribe: attr_handle=%d cur_notify=%d "
+                 "(rx_pkt=%d dev_status=%d tx_result=%d gps=%d sys=%d pwr=%d dbg=%d kiss_rx=%d)",
+                 event->subscribe.attr_handle,
+                 (int)event->subscribe.cur_notify,
+                 g_h_rx_packet, g_h_dev_status, g_h_tx_result,
+                 g_h_gps_telem, g_h_system_telem, g_h_power_telem,
+                 g_h_debug_stream, g_h_kiss_rx);
         break;
 
     default:
@@ -386,7 +410,7 @@ static int aprs_access_cb(uint16_t conn_h, uint16_t attr_h,
 
     // Security check for config, command, and TX request.
     if (!conn_is_encrypted_and_bonded(conn_h)) {
-        ESP_LOGW(TAG, "write rejected: link not encrypted+bonded");
+        ESP_LOGW(TAG, "write rejected: link not encrypted");
         return BLE_ATT_ERR_INSUFFICIENT_AUTHEN;
     }
 
@@ -480,7 +504,12 @@ static int kiss_access_cb(uint16_t conn_h, uint16_t /*attr_h*/,
 
 static void on_ble_sync()
 {
+    // NimBLE calls ble_gatts_start() before firing sync, so val_handles are
+    // now valid. Copy them to the BleServer instance — they were 0 at init()
+    // time because ble_gatts_add_svcs() only queues services; actual handle
+    // assignment happens inside ble_hs_start() → ble_gatts_start().
     pakt::BleServer &srv = pakt::BleServer::instance();
+    srv.sync_handles();
     start_advertising_internal(srv.device_name());
 }
 
@@ -568,19 +597,9 @@ bool BleServer::init(const Handlers &handlers, const char *device_name)
         return false;
     }
 
-    // Copy value handles to the BleServer instance after registration.
-    h_dev_config_   = g_h_dev_config;
-    h_dev_command_  = g_h_dev_command;
-    h_dev_status_   = g_h_dev_status;
-    h_dev_caps_     = g_h_dev_caps;
-    h_rx_packet_    = g_h_rx_packet;
-    h_tx_request_   = g_h_tx_request;
-    h_tx_result_    = g_h_tx_result;
-    h_gps_telem_    = g_h_gps_telem;
-    h_power_telem_  = g_h_power_telem;
-    h_system_telem_ = g_h_system_telem;
-    h_kiss_rx_      = g_h_kiss_rx;
-    h_kiss_tx_      = g_h_kiss_tx;
+    // Value handles are assigned by ble_gatts_start() inside the NimBLE host
+    // task — NOT here. sync_handles() is called from on_ble_sync() after the
+    // host has started and all handles are valid.
 
     initialized_ = true;
     ESP_LOGI(TAG, "BleServer initialized");
@@ -622,12 +641,35 @@ void BleServer::set_bonded(bool bonded)
     bonded_ = bonded;
 }
 
+void BleServer::sync_handles()
+{
+    h_dev_config_   = g_h_dev_config;
+    h_dev_command_  = g_h_dev_command;
+    h_dev_status_   = g_h_dev_status;
+    h_dev_caps_     = g_h_dev_caps;
+    h_rx_packet_    = g_h_rx_packet;
+    h_tx_request_   = g_h_tx_request;
+    h_tx_result_    = g_h_tx_result;
+    h_gps_telem_    = g_h_gps_telem;
+    h_power_telem_  = g_h_power_telem;
+    h_system_telem_ = g_h_system_telem;
+    h_debug_stream_ = g_h_debug_stream;
+    h_kiss_rx_      = g_h_kiss_rx;
+    h_kiss_tx_      = g_h_kiss_tx;
+    ESP_LOGI(TAG, "handles synced: rx_pkt=%u dev_status=%u tx_result=%u gps=%u sys=%u pwr=%u dbg=%u",
+             h_rx_packet_, h_dev_status_, h_tx_result_,
+             h_gps_telem_, h_system_telem_, h_power_telem_, h_debug_stream_);
+}
+
 // ── Notify helpers ────────────────────────────────────────────────────────────
 
 bool BleServer::send_notify_(uint16_t val_handle, int64_t &last_us,
                               const uint8_t *data, size_t len)
 {
-    if (!connected_ || val_handle == 0) return false;
+    if (!connected_) {
+        return false;
+    }
+    if (val_handle == 0) return false;
 
     // Rate-limit: drop if notified too recently.
     const int64_t now_us = esp_timer_get_time();
@@ -636,13 +678,19 @@ bool BleServer::send_notify_(uint16_t val_handle, int64_t &last_us,
     }
 
     struct os_mbuf *om = ble_hs_mbuf_from_flat(data, len);
-    if (!om) return false;
+    if (!om) {
+        ESP_LOGW(TAG, "send_notify_: mbuf alloc failed (handle=%u)", val_handle);
+        return false;
+    }
 
+    ESP_LOGI(TAG, "send_notify_: calling notify_custom handle=%u conn=%u len=%u", val_handle, conn_handle_, (unsigned)len);
     int rc = ble_gatts_notify_custom(conn_handle_, val_handle, om);
     if (rc == 0) {
         last_us = now_us;
         return true;
     }
+    // rc=8 (BLE_HS_ENOTCONN) → no active L2CAP ATT channel for this conn_handle.
+    ESP_LOGW(TAG, "notify failed: handle=%u rc=%d", val_handle, rc);
     return false;
 }
 
@@ -652,6 +700,7 @@ bool BleServer::notify_tx_result(const uint8_t *d, size_t n) { return send_notif
 bool BleServer::notify_gps      (const uint8_t *d, size_t n) { return send_notify_(h_gps_telem_,   last_notify_gps_,    d, n); }
 bool BleServer::notify_power    (const uint8_t *d, size_t n) { return send_notify_(h_power_telem_, last_notify_power_,  d, n); }
 bool BleServer::notify_system   (const uint8_t *d, size_t n) { return send_notify_(h_system_telem_,last_notify_system_, d, n); }
+bool BleServer::notify_debug    (const uint8_t *d, size_t n) { return send_notify_(h_debug_stream_,last_notify_debug_,  d, n); }
 
 bool BleServer::notify_kiss_rx(const uint8_t *d, size_t n)
 {
@@ -710,5 +759,12 @@ bool BleServer::notify_kiss_rx(const uint8_t *d, size_t n)
 
 bool BleServer::is_connected() const { return connected_; }
 bool BleServer::is_bonded()    const { return bonded_;    }
+bool BleServer::is_encrypted() const
+{
+    if (!connected_) return false;
+    struct ble_gap_conn_desc desc{};
+    if (ble_gap_conn_find(conn_handle_, &desc) != 0) return false;
+    return desc.sec_state.encrypted;
+}
 
 } // namespace pakt

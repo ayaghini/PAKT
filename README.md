@@ -11,6 +11,7 @@ has now cleared the core codec and radio bring-up steps:
   KISS-over-BLE, APRS TX scheduling, telemetry payloads, SGTL5000 audio pipeline bring-up,
   staged SA818 bench tests, and SA818 control paths
 - the desktop test app and KISS bridge are implemented as reference host tools
+- an in-repo iPhone-only SwiftUI app track now exists under `app/ios/`, built against the same native BLE protocol as the desktop client
 - host-side software evidence is strong, with current docs recording `364/364` host tests passing
 - bench bring-up has confirmed SGTL5000 discovery and headphone output, shared I2C
   visibility for the MAX17048 and M9N, SA818 UART handshake/config, staged PTT/audio tests,
@@ -30,8 +31,12 @@ Recent bench work materially improved the RF picture:
   and reducing Stage C SA818 receive volume; the prototype now decodes APRS frames on-device
 - the APRS message-ack path is now wired into `TxScheduler`, so on-air APRS acks
   can complete the firmware message FSM instead of always timing out
-- the GPS UART path is now live in firmware on `UART2` (`GPIO17/GPIO18`, `38400` baud),
-  though physical wiring/fix validation is still pending on hardware
+- the GPS path now prefers the shared Feather I2C/STEMMA bus (`u-blox M9N @ 0x42`)
+  with `UART2` (`GPIO17/GPIO18`, `38400` baud) retained as a fallback; raw NMEA
+  traffic is now logged/published even before a valid fix
+- GPS over the shared Feather I2C/STEMMA bus is now working on the current
+  prototype, including live telemetry delivery to the app; this path should now
+  be treated as the default GPS integration baseline rather than an open bring-up item
 
 The project is not MVP-complete yet because hardware validation still gates the milestone:
 - BLE security and PTT fail-safe validation on hardware
@@ -48,7 +53,8 @@ The project is not MVP-complete yet because hardware validation still gates the 
 | APRS TX over RF | `proven on current prototype` | tone sequence and APRS packets were heard/received again after SA818 recovery on 2026-03-21 |
 | APRS RX over RF | `proven on current prototype` | quiet-profile RX now decodes APRS on-device after fixing the half-rate capture bug and reducing Stage C volume |
 | BLE/KISS hardware validation | `pending` | software-complete enough for hardware validation |
-| MVP milestone | `open` | blocked by RF validation, RX proof, BLE safety validation, and remaining hardware gates
+| GPS over shared I2C | `proven on current prototype` | `u-blox M9N @ 0x42` is detected after startup, hot-switches to I2C/DDC, and publishes live telemetry to the app |
+| MVP milestone | `open` | blocked by BLE safety validation, radio calibration/repeatability, and remaining hardware gates
 
 ## Progress Summary
 - Software stack is largely implemented and test-backed.
@@ -59,7 +65,8 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - Full RX recorder/export now works through PSRAM-backed WAV capture, and the quiet profile can export captured demod-input audio through a framed binary serial stream for offline reconstruction.
 - A real RX blocker was found and fixed: the audio pipeline was unpacking only half of each 2048-byte I2S read, effectively feeding the demodulator at `8 kHz` while configured for `16 kHz`.
 - After fixing that bug and lowering quiet-profile Stage C SA818 volume from `8` to `4`, the device decoded multiple on-air APRS frames in the same `30 s` window.
-- GPS parsing is no longer a stub: `gps_task` now drives a real UART/NMEA path in firmware, pending hardware confirmation of the M9N UART wiring.
+- GPS parsing is no longer a stub: `gps_task` now reads the M9N over the shared I2C bus when present, falls back to UART if needed, and publishes BLE GPS telemetry even in the no-fix state.
+- GPS over the shared Feather I2C/STEMMA bus is now confirmed working in the current hardware setup, and live GPS data is reaching the app.
 - APRS ack handling is no longer a dead end: received APRS acks can now call `ctx.notify_ack()` and complete the message FSM in firmware.
 - The RX path is now also configurable at the firmware level for:
   - `8 kHz` or `16 kHz` audio rate
@@ -76,8 +83,9 @@ The project is not MVP-complete yet because hardware validation still gates the 
 ## Immediate Next Steps
 1. Validate BLE encrypted+bonded write enforcement and PTT fail-safe behavior on live hardware.
 2. Verify the newly wired APRS ack path end-to-end with real on-air message acknowledgements.
-3. Verify the live GPS UART path against the connected M9N hardware and confirm BLE GPS telemetry.
-4. Validate native BLE + KISS-over-BLE behavior on hardware, including reconnect and at least one real client path.
+3. Validate native BLE + KISS-over-BLE behavior on hardware, including reconnect and at least one real client path.
+4. Bring up the iPhone app against the same firmware build: connect, view APRS RX/GPS/status, send TX requests, change radio settings, and enable the BLE debug stream.
+5. Keep the shared-I2C GPS path as the default baseline and only use UART fallback for alternate wiring or recovery.
 
 ## Bench Profile
 - Bench/debug stage selection is controlled in [bench_profile_config.h](/Users/macmini4/Desktop/PAKT/firmware/main/bench_profile_config.h).
@@ -94,7 +102,7 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - The same file now controls the audio debug sample rate and RX sample interpretation path.
 
 ## Current Status
-- Phase: prototype hardware bring-up in progress, with both packet TX and on-device APRS RX now proven on the current prototype; remaining work is calibration, repeatability, and safety validation
+- Phase: prototype hardware bring-up in progress, with packet TX, on-device APRS RX, and shared-I2C GPS telemetry now proven on the current prototype; remaining work is calibration, repeatability, app validation, and safety validation
 - Firmware build flow: ESP-IDF with `idf.py`
 - Host test flow: raw CMake only for `firmware/test_host`
 - Canonical wire-format source: `docs/aprs_mvp_docs/payload_contracts.md`

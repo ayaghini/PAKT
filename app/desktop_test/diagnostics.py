@@ -35,6 +35,7 @@ class DiagnosticsStore:
         self._power:  deque[PowerTelem]   = deque(maxlen=self.kMaxSamples)
         self._sys:    deque[SysTelem]     = deque(maxlen=self.kMaxSamples)
         self._rx_frames: list[str]        = []   # decoded APRS frames (raw text)
+        self._debug_lines: list[str]      = []
         self._session_start = datetime.now(timezone.utc)
 
     # ── Ingestion ─────────────────────────────────────────────────────────────
@@ -53,6 +54,10 @@ class DiagnosticsStore:
     def add_rx_frame(self, frame_text: str) -> None:
         """Record a decoded APRS RX frame string."""
         self._rx_frames.append(frame_text)
+
+    def add_debug_line(self, line: str) -> None:
+        """Record a debug-stream line for the active session."""
+        self._debug_lines.append(line)
 
     # ── Inspection ────────────────────────────────────────────────────────────
 
@@ -88,6 +93,7 @@ class DiagnosticsStore:
             "export_utc":        now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
             "duration_s":        duration_s,
             "rx_frames":         list(self._rx_frames),
+            "debug_lines":       list(self._debug_lines),
         }
 
         # ── device_status summary ─────────────────────────────────────────────

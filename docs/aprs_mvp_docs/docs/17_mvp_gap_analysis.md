@@ -1,6 +1,6 @@
 # MVP Gap Analysis — Firmware, Protocols, and KISS TNC
 
-Date: 2026-03-27
+Date: 2026-03-28
 Purpose: make the remaining implementation gaps explicit so an agent can begin work immediately.
 
 ## 1. Scope
@@ -46,9 +46,14 @@ The project is therefore not MVP-complete until:
 - the characteristic exists but command semantics are still narrow
 - additional bench-control and diagnostics commands may still be useful during bring-up
 
-6. **GPS UART integration is not live**
-- Parser exists
-- task still contains UART placeholder code
+6. **GPS transport is now live; remaining work is validation breadth, not first bring-up**
+- shared Feather I2C/STEMMA GPS path now works on the current prototype
+- `UART2` fallback remains available for alternate wiring
+- BLE/app GPS telemetry is now confirmed flowing from the device
+- remaining work is broader validation:
+  - repeated cold/warm start behavior
+  - fix-acquisition timing characterization
+  - coexistence with the rest of the MVP runtime under longer sessions
 
 7. **Power telemetry path is not live**
 - schema exists
@@ -60,6 +65,15 @@ The project is therefore not MVP-complete until:
 - on-device APRS RX is now also proven on hardware after fixing a real half-rate I2S RX unpack bug and reducing receive volume to avoid clipping during the quiet-profile capture workflow
 - receive-side instrumentation now includes peak/flag/FCS/decode counters, PSRAM-backed WAV export, selectable bench stages, `16 kHz` capture mode, and configurable RX sample interpretation
 - remaining work is no longer first RX proof; it is repeatability, margin tuning, calibration, and clean integration of the corrected RX path into the normal firmware workflow
+
+9. **Native command/status surface was too thin for a phone operator app — partially closed**
+- `Device Command` now supports:
+  - `radio_set`
+  - `debug_stream`
+  - `beacon_now`
+- `Device Status` is now a real live notify payload with radio/runtime fields suitable for a dashboard
+- a dedicated BLE debug stream notify characteristic now exists
+- remaining work is app delivery and hardware validation of the new BLE app-facing flows
 
 ## 3. Protocol gaps
 
@@ -79,8 +93,9 @@ The project is therefore not MVP-complete until:
 1. `05_ble_gatt_spec.md`, `16_kiss_over_ble_spec.md`, and code must stay aligned as hardware validation closes out remaining gaps.
 2. `payload_contracts.md` covers JSON only; KISS binary behavior must remain documented in `16_kiss_over_ble_spec.md`.
 3. Error accounting for malformed/oversize KISS frames must be implemented and surfaced consistently.
+4. The native protocol now has a dedicated debug stream and richer device status; docs, firmware, and both clients must stay aligned as the iPhone app lands.
 
-## 4. App and tooling gaps (updated 2026-03-19)
+## 4. App and tooling gaps (updated 2026-03-28)
 
 1. **Desktop KISS harness/bridge — software complete**
 - ✅ `app/desktop_test/kiss_bridge.py`: KissPacketizer (serial framing), KissBridge (BLE bridge), chunking helpers
@@ -92,6 +107,15 @@ The project is therefore not MVP-complete until:
 
 3. **Interop matrix is still mostly expectation-level**
 - Needs real tested entries once firmware path exists (hardware-gated)
+
+4. **iPhone app track now exists, but implementation/validation is new**
+- target is iPhone-only SwiftUI (`app/ios/`)
+- must remain protocol-compatible with the desktop app
+- firmware additions for app support are now in progress:
+  - dedicated debug stream notify
+  - richer device status payload
+  - expanded command channel for radio control
+- hardware validation of the iPhone app is still open
 
 ## 5. Recommended implementation order (updated 2026-03-19)
 
@@ -115,13 +139,15 @@ Hardware-gated remaining items:
 - TX deviation calibration and documented known-good audio settings
 - clean hardware validation of the main/default firmware path beyond the quiet-profile debug workflow
 - final BLE/KISS/client validation on top of the now-working RF path
+- iPhone app implementation and on-device BLE validation
+- broader GPS stability characterization beyond the now-working shared-I2C baseline
 
 ## 6. Agent-ready next tasks
 
 - Validate native + KISS coexistence under reconnect, chunk loss, and malformed input cases on hardware.
+- Deliver the iPhone MVP app against the same BLE protocol used by the desktop app, then validate connect/RX/TX/radio-control/debug flows on hardware.
 - Measure SA818 TX deviation and record the actual AF attenuation settings used on the bench harness.
-- Continue SGTL5000/I2S/capture-path debugging using the new `16 kHz` recorder mode and sample-interpretation controls.
-- Re-run APRS RX with a trusted Bell 202 source and close the receive-margin question.
+- Continue RX repeatability/margin work now that on-device APRS decode is proven.
 - Run hardware bring-up follow-up for BLE security, SGTL5000 MCLK stability, and PTT safety.
-- Close remaining hardware-gated RF/audio/GPS/power items.
+- Close remaining hardware-gated RF/audio/power items and broaden GPS validation from baseline proof to endurance/repeatability.
 - Update interoperability matrix (`docs/15_interoperability_matrix.md`) with real validated clients once hardware is available.
