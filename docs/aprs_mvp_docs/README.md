@@ -39,6 +39,7 @@ A pocket device that:
 - `docs/15_interoperability_matrix.md`
 - `docs/16_kiss_over_ble_spec.md`
 - `docs/17_mvp_gap_analysis.md`
+- `docs/19_ble_integration_reference.md`
 - `hardware/placeholder_bom.csv`
 - `hardware/interfaces.md`
 - `agent_bootstrap/README.md` (low-token onboarding pack for AI agents)
@@ -73,6 +74,13 @@ The bootstrap pack includes:
 - `docs/aprs_mvp_docs/` is the canonical spec, architecture, protocol, and project-status tree.
 - The sibling files under repo-root `docs/` are the practical operator/developer companion docs for setup and bench execution.
 - If implementation-status wording disagrees, prefer `agent_bootstrap/gate_pass_matrix.md`, `agent_bootstrap/audit.md`, and `firmware/main/main.cpp`.
+- BLE/protocol change-control set:
+  - `docs/05_ble_gatt_spec.md`
+  - `docs/19_ble_integration_reference.md`
+  - `payload_contracts.md`
+  - `docs/16_kiss_over_ble_spec.md`
+  - `agent_bootstrap/ble_protocol_quickref.md`
+- If BLE UUIDs, payloads, chunking, command semantics, or client-facing protocol behavior changes, update the relevant files in this set together.
 
 ## Current hardware baseline
 - Audio codec: `SGTL5000` (with explicit `I2S_MCLK`)
@@ -84,6 +92,7 @@ The bootstrap pack includes:
 - New coding agent: start with `agent_bootstrap/README.md`
 - Firmware bring-up: read `docs/06_firmware_architecture.md`, `docs/07_audio_i2s_codec_notes.md`, `agent_bootstrap/audit.md`, and `../bench_bringup_checklist.md`
 - Host/app integration: read `docs/05_ble_gatt_spec.md`, `docs/16_kiss_over_ble_spec.md`, `payload_contracts.md`, and the desktop app sources under `app/desktop_test/`
+- Cross-platform BLE integration: start with `docs/19_ble_integration_reference.md`, then `docs/05_ble_gatt_spec.md`, `payload_contracts.md`, and `docs/16_kiss_over_ble_spec.md`
 - iPhone app implementation: start with `docs/18_ios_app_architecture.md`, then `docs/05_ble_gatt_spec.md`, `payload_contracts.md`, and the desktop app sources under `app/desktop_test/`
 
 ## Current status at a glance

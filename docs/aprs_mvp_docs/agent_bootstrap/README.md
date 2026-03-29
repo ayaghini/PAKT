@@ -8,14 +8,16 @@ Load order (strict):
 3. `architecture_contracts.md`
 4. `implementation_steps_mvp.md`
 5. `qa_gates.md`
-6. `handoff_prompt_template.md` (only when handing to another agent)
-7. `device_loop.md` (required when hardware is connected)
+6. `ble_protocol_quickref.md` (required when touching BLE, desktop app, iPhone app, or protocol payloads)
+7. `handoff_prompt_template.md` (only when handing to another agent)
+8. `device_loop.md` (required when hardware is connected)
 
-Files 1-5 are always required. File 6 is handoff-only. File 7 is hardware-only.
+Files 1-5 are always required. File 6 is BLE/protocol work only. File 7 is handoff-only. File 8 is hardware-only.
 
 Per-step reference docs (consult `step_source_map.md` to know which to open for each step):
 - `../docs/02_mvp_scope.md`
 - `../docs/05_ble_gatt_spec.md`
+- `../docs/19_ble_integration_reference.md`
 - `../docs/06_firmware_architecture.md`
 - `../docs/08_test_plan.md`
 - `../docs/12_implementation_backlog.md`
@@ -32,6 +34,14 @@ Rules:
 - Raw CMake is used only for pure-software host tests under `firmware/test_host`.
 - Treat `audit.md` as the rolling truth for recent implementation passes and `gate_pass_matrix.md` as the concise status summary.
 - When those files disagree with older step prose, prefer the newer pass log and then update the stale prose.
+- For BLE/protocol work, load `ble_protocol_quickref.md` first and open the full [BLE API / Protocol Reference](/Users/macmini4/Desktop/PAKT/docs/aprs_mvp_docs/docs/19_ble_integration_reference.md) when you need exact payloads, UUID strings, or sequence-level behavior.
+- BLE/protocol change-control set:
+  - `../docs/05_ble_gatt_spec.md`
+  - `../docs/19_ble_integration_reference.md`
+  - `../payload_contracts.md`
+  - `../docs/16_kiss_over_ble_spec.md`
+  - `ble_protocol_quickref.md`
+- If BLE UUIDs, payload fields, chunking, command semantics, or client-facing protocol behavior changes, update the relevant files in this set in the same change.
 
 ## What this pack must provide
 - Clear defaults so agents do not invent radio/BLE behavior.

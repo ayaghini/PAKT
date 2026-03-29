@@ -151,6 +151,7 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - `docs/aprs_mvp_docs/agent_bootstrap/audit.md`
 - `docs/aprs_mvp_docs/docs/02_mvp_scope.md`
 - `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`
+- `docs/aprs_mvp_docs/docs/19_ble_integration_reference.md`
 - `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`
 - `docs/aprs_mvp_docs/payload_contracts.md`
 - `docs/dev_setup.md`
@@ -174,8 +175,13 @@ The project is not MVP-complete yet because hardware validation still gates the 
 - Use ESP-IDF `idf.py` for firmware builds; do not use raw CMake as the direct firmware entrypoint.
 - Use raw CMake only for pure-software host tests under `firmware/test_host`.
 - Keep `docs/aprs_mvp_docs/docs/05_ble_gatt_spec.md`,
+- `docs/aprs_mvp_docs/docs/19_ble_integration_reference.md`,
+- `docs/aprs_mvp_docs/agent_bootstrap/ble_protocol_quickref.md`,
   `docs/aprs_mvp_docs/docs/16_kiss_over_ble_spec.md`, and
   `docs/aprs_mvp_docs/payload_contracts.md` aligned with the implementation.
+- If BLE UUIDs, payload fields, command semantics, chunking, or client behavior changes,
+  update all relevant protocol docs in the same change so the desktop app, iPhone app,
+  firmware, and future integrations do not drift.
 - Prefer `firmware/main/main.cpp` and the component implementations as the source of truth for what is actually wired versus still hardware-gated.
 
 ## Build Directories
