@@ -1,20 +1,26 @@
-# CAD Assets
+# MCP73831 CAD Assets
 
-This folder tracks schematic symbols, PCB footprints, and 3D STEP models for this component.
+## KiCad symbol
+- Local symbol file: `symbols/MCP73831.kicad_sym`
+- Symbol name: `MCP73831T-2ACI/OT`
+- Pinout: `STAT`, `VSS`, `VBAT`, `VDD`, `PROG`
 
-## Symbol (KiCad)
-- Place .kicad_sym files in symbols/.
-- Preferred naming: <component>.kicad_sym.
+## Footprint
+- Preferred footprint library: KiCad standard
+- Preferred footprint: `Package_TO_SOT_SMD:SOT-23-5`
+- Important note: the old placeholder DFN footprint in this folder is not the active package choice for this project.
 
-## Footprint (KiCad)
-- Place footprint library folders or .kicad_mod files in ootprints/.
-- Preferred naming: <component>.pretty/.
+## 3D model
+- Preferred model source: KiCad standard SOT-23-5 model
+- No custom local STEP model is required unless mechanical enclosure work demands it.
 
-## 3D Model (STEP)
-- Place .step/.stp files in step/.
-- Align model origin/orientation to the KiCad footprint before PCB release.
+## KiCad capture guidance
+- `VDD` goes to `VBUS`.
+- `VBAT` goes to the raw single-cell battery node.
+- `PROG` uses the charge-current set resistor.
+- `STAT` can drive a charge LED directly in the Adafruit-style reference topology.
 
 ## Verification checklist
-- Symbol pin numbers match datasheet package pinout.
-- Footprint pads, courtyard, and orientation match package drawing.
-- 3D model aligns with footprint and board top/bottom side as intended.
+- Match the selected `MCP73831T-2ACI/OT` package drawing before layout release.
+- Reconfirm the final `PROG` resistor against the intended battery charge current.
+- Keep the charger input, battery connector, and battery bulk capacitor physically tight.

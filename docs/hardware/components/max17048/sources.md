@@ -1,11 +1,22 @@
 # MAX17048 Sources
 
-## Official references
-- MAX17048 product page
+## OEM references
+- Analog Devices product page
   - https://www.analog.com/en/products/max17048.html
-
-- MAX17048/MAX17049 data sheet (PDF)
+- Analog Devices datasheet PDF
   - https://www.analog.com/media/en/technical-documentation/data-sheets/max17048-max17049.pdf
 
+## OEM application / design guidance
+- Analog Devices technical article: Characterizing a Battery for Use with a Fuel Gauge
+  - https://www.analog.com/en/resources/technical-articles/battery-gauge--maxim-integrated.html
+
+## Bench-board reference
+- Adafruit Learn guide: Adafruit ESP32-S3 Feather
+  - https://learn.adafruit.com/adafruit-esp32-s3-feather/overview
+- Adafruit Learn downloads page
+  - https://learn.adafruit.com/adafruit-esp32-s3-feather/downloads
+
 ## Project note
-- MAX17048 is the active fuel-gauge baseline to match Adafruit Feather ESP32-S3 prototyping hardware.
+- `MAX17048` is the locked fuel-gauge baseline for the custom PCB.
+- The bench board is the Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM`.
+- Adafruit's current public Learn guide for that board identifies `MAX17048` as the battery gauge.

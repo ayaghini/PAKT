@@ -1,25 +1,30 @@
 # CAD Asset Status
 
-This file records which CAD assets are exact matches and which are provisional.
+This file tracks the CAD assets that matter for the current PCB baseline.
 
 ## Status legend
-- `exact`: symbol/footprint/model matches the intended component or module.
-- `provisional`: usable starting point, but package/symbol/model needs final verification before PCB release.
+- `exact`: ready to use as-is for the active hardware baseline.
+- `provisional`: usable with explicit pre-schematic verification.
+- `reference-only`: archived or historical, not part of the active PCB baseline.
 
-## Component matrix
+## Active component matrix
 | Component | Symbol | Footprint | STEP | Status | Notes |
 |---|---|---|---|---|---|
-| `esp32-s3` | `RF_Module.kicad_sym` | `ESP32-S3-WROOM-1.kicad_mod` | `ESP32-S3-WROOM-1.step` | exact | From KiCad 9 default libraries. |
-| `sa818` | `SA818S.kicad_sym` | `XCVR_SA818S.kicad_mod` | `SA818S.step` | exact | Imported from existing local `uConsole_HAM_HAT` component library. |
-| `sgtl5000` | `Audio.kicad_sym` | `QFN-32-1EP_5x5mm_P0.5mm_EP3.6x3.6mm.kicad_mod` | `QFN-32-1EP_5x5mm_P0.5mm_EP3.7x3.7mm.step` | provisional | Closest local STEP available is EP `3.7x3.7`. |
-| `neo-m8n` | `RF_GPS.kicad_sym` | `ublox_NEO.kicad_mod` | `NEO-M9N-00B.step` | provisional | Local KiCad install lacked `ublox_NEO.step`; using close u-blox module STEP. |
-| `mcp73831` | `Battery_Management.kicad_sym` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.7x1.4mm.kicad_mod` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.75x1.45mm.step` | provisional | Closest local STEP variant used. |
-| `max17048` | `Battery_Management.kicad_sym` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.7x1.4mm.kicad_mod` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.75x1.45mm.step` | provisional | KiCad default libs do not include a dedicated MAX17048 symbol in this environment. |
-| `max17043` | `Battery_Management.kicad_sym` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.7x1.4mm.kicad_mod` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.75x1.45mm.step` | provisional | Legacy alternate only; dedicated symbol not found in local default libs. |
-| `wm8960` | `Audio.kicad_sym` | `QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.kicad_mod` | `QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step` | provisional | Legacy codec reference; dedicated WM8960 symbol not found in local default libs. |
+| `esp32-s3` | `RF_Module.kicad_sym` | `ESP32-S3-WROOM-1.kicad_mod` | `ESP32-S3-WROOM-1.step` | provisional | Use as a module reference only after matching the exact `4 MB / 2 MB PSRAM` module variant for the PCB. |
+| `sa818` | `SA818S.kicad_sym` | `XCVR_SA818S.kicad_mod` | `SA818S.step` | exact | Bench baseline radio module. |
+| `sgtl5000` | `Audio.kicad_sym` | `QFN-32-1EP_5x5mm_P0.5mm_EP3.6x3.6mm.kicad_mod` | `QFN-32-1EP_5x5mm_P0.5mm_EP3.7x3.7mm.step` | provisional | Symbol is fine; confirm exposed-pad size and 3D fit before PCB release. |
+| `neo-m8n` | `RF_GPS.kicad_sym` | `ublox_NEO.kicad_mod` | `NEO-M9N-00B.step` | provisional | Folder name is legacy; current bench baseline is `NEO-M9N`. |
+| `max17048` | `MAX17048.kicad_sym` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.7x1.4mm.kicad_mod` | `DFN-8-1EP_3x2mm_P0.5mm_EP1.75x1.45mm.step` | provisional | Dedicated local symbol added; confirm package drawing against the exact orderable suffix before release. |
+| `mcp73831` | `MCP73831.kicad_sym` | `Package_TO_SOT_SMD:SOT-23-5` | standard KiCad 3D model | provisional | Active charger package is `SOT-23-5`; do not use the old placeholder DFN mapping. |
 
-## Pre-release checks required
-1. Confirm pin mapping for `max17048` symbol selection before schematic freeze.
-2. Confirm exposed pad and body dimensions for `mcp73831` and `sgtl5000` STEP choices.
-3. Replace `neo-m8n` STEP with exact NEO-M8N model if strict mechanical fit is required.
-4. If `wm8960` is reintroduced, import a dedicated WM8960 symbol before use.
+## Archived references
+| Component | Status | Notes |
+|---|---|---|
+| `max17043` | reference-only | Archived alternate, not part of the current PCB baseline. |
+| `wm8960` | reference-only | Archived codec alternate, not part of the current PCB baseline. |
+
+## Pre-schematic checks still required
+1. Lock the exact ESP32-S3 module orderable tied to the final antenna/module strategy.
+2. Confirm the SGTL5000 exposed pad and analog supply pin decoupling network from the NXP datasheet.
+3. Confirm the exact `NEO-M9N` mechanical model if enclosure clearance is tight.
+4. Verify the MAX17048 and MCP73831 package land patterns against the selected manufacturers' package drawings before fab release.

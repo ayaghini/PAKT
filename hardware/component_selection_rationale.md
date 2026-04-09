@@ -1,70 +1,73 @@
-# Component Selection Rationale (PCB-Oriented)
+# Confirmed Hardware Baseline
 
-This document records the current component decisions and readiness for schematic/PCB capture.
+This document replaces the earlier option-screening rationale with the
+bench-confirmed hardware baseline that should drive KiCad schematic capture.
 
-## 1. Decision status summary
+## Locked subsystem choices
 
-| Subsystem | Selected | Status | Reason |
-|-----------|----------|--------|--------|
-| MCU + BLE/Wi-Fi | ESP32-S3 module with PSRAM | Locked | Strong ecosystem, enough compute for AFSK + BLE, available dev modules. |
-| RF modem module | SA818 (VHF variant) | Locked for MVP | Fastest path for APRS RF MVP with UART + AF/PTT interface. |
-| Audio codec | SGTL5000 | Locked for prototype and Rev A baseline | Better lifecycle confidence, strong dev-board ecosystem, sufficient feature set for mono APRS modem path. |
-| GPS | U-blox NEO-M8N class | Locked | Strong field performance and common UART workflow. |
-| Fuel gauge | MAX17048 | Locked | Matches Adafruit Feather ESP32-S3 baseline for prototype-to-PCB continuity. |
-| Charger | MCP73831/2 | Locked for PCB | Matches Adafruit Feather ESP32-S3 charging topology and simplifies migration. |
-| Display | 0.96" SSD1306 I2C | Optional for MVP board | Useful for bring-up and diagnostics; can be depopulated in compact builds. |
+| Subsystem | Locked baseline | Status | PCB implication |
+|-----------|-----------------|--------|-----------------|
+| MCU + BLE/Wi-Fi | Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM` bench baseline | locked | Match the exact bench board family for power-domain behavior and proven GPIO usage. |
+| RF modem module | `SA818-V` | locked | Keep UART + PTT + AF wiring unchanged from the bench profile. |
+| Audio codec | `SGTL5000` | locked | Preserve `SYS_MCLK` requirement and the proven `LINE_OUT_L` / `LINE_IN_L` radio path. |
+| GPS | u-blox `NEO-M9N` class | locked | Keep shared-I2C integration as the default baseline; retain UART fallback pads if space allows. |
+| Fuel gauge | `MAX17048` | locked | Follow the Adafruit ESP32-S3 Feather `4MB Flash / 2MB PSRAM` bench-board behavior and pin usage. |
+| Charger | `MCP73831T-2ACI/OT` topology | locked | Follow the same Feather bench-board charging behavior. |
 
-## 2. Validation notes by subsystem
+## What is no longer part of the active baseline
+- `WM8960` is no longer an active codec candidate.
+- `MAX17043` is no longer an active fuel-gauge candidate.
+- Older Feather battery-gauge topologies that use `LC709203` are not the reference for this PCB.
+- The optional SSD1306 display is not part of the first PCB capture baseline.
 
-### 2.1 ESP32-S3 module
-- Use a certified module variant where possible to reduce RF and manufacturing risk.
-- Keep UART debug/programming access in PCB rev A.
-- Reserve one spare GPIO for recovery and test instrumentation.
+## Bench-confirmed design rules to preserve
 
-### 2.2 SA818 module
-- Key interface dependencies to verify before release:
-  - supply voltage range on exact module revision
-  - TX burst current and rail droop
-  - PTT active level and default state
-  - AF input/output level expectations
-- Keep antenna feed short and controlled; place module away from high-speed digital lines.
+### ESP32-S3
+- Preserve the proven bus and control mapping:
+  - `GPIO3` -> `I2C_SDA`
+  - `GPIO4` -> `I2C_SCL`
+  - `GPIO8` -> `I2S_BCLK`
+  - `GPIO15` -> `I2S_WS`
+  - `GPIO12` -> `I2S_DOUT`
+  - `GPIO10` -> `I2S_DIN`
+  - `GPIO14` -> `I2S_MCLK`
+  - `GPIO13` -> `SA818_RX_CTRL`
+  - `GPIO9` -> `SA818_TX_STAT`
+  - `GPIO11` -> `SA818_PTT`
+  - `GPIO17/GPIO18` -> GPS UART fallback
+- Keep UART debug/programming access on Rev A.
 
-### 2.3 SGTL5000 codec
-- Confirm I2C address strap and control bus pull-ups in schematic notes.
-- SGTL5000 requires stable `SYS_MCLK`; reserve explicit ESP32 MCLK-capable output pin.
-- Place optional analog gain/attenuation footprints between codec and SA818.
-- Split analog and digital supply filtering on PCB where feasible.
+### SA818-V
+- Preserve active-low PTT behavior.
+- Keep local radio bulk capacitance near the module.
+- Keep the antenna path short, controlled, and isolated from high-speed digital routing.
 
-### 2.4 GPS module (NEO-M8N class)
-- Include optional PPS connection footprint to MCU.
-- Keep GPS RF area physically separated from SA818 and noisy switching nodes.
+### SGTL5000
+- Keep `SYS_MCLK` explicit in the schematic and routing plan.
+- Preserve the firmware bring-up order: start `I2S/MCLK`, then configure the codec over I2C.
+- Keep AC-coupled analog paths with DNP tuning footprints for TX attenuation and RX filtering.
 
-### 2.5 Power subsystem
-- Keep charger and battery protection close to connector/battery entry.
-- Isolate radio rail return from sensitive analog and MCU ground paths.
-- Add test points for `VBAT_RAW`, `V_SYS_3V3`, `V_RADIO`.
+### GPS
+- Shared I2C is the default integration baseline because it is bench-proven.
+- UART fallback remains useful for recovery, alternate modules, or debug.
+- Add optional PPS if routing budget permits.
 
-## 3. Components to keep as alternatives (do not block schematic)
+### Battery subsystem
+- Mirror the Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM` battery behavior so bench wiring and custom PCB behavior stay aligned.
+- Keep charger, battery connector, bulk cap, and fuel gauge physically close to the battery entry area.
+- Add test points for `VBAT_RAW`, `V_SYS_3V3`, `V_RADIO`, and charger status if possible.
 
-- Codec alternates: TLV320AIC3204, TLV320AIC3101/AIC3104.
-- Fuel gauge alternates: LC709203F, MAX17043.
-- Charger alternate: BQ24075 family if power-path behavior is required.
+## Schematic requirements generated from the confirmed baseline
+1. Explicit `VBUS`, `VBAT_RAW`, `V_SYS_3V3`, `V_AUD_3V3`, and `V_RADIO` nets.
+2. Explicit `I2S_MCLK` net from ESP32-S3 to SGTL5000.
+3. DNP footprints for AF gain shaping and receive filtering.
+4. DNP footprint for an optional PTT transistor stage.
+5. USB-C sink `CC1/CC2` resistors and ESD protection on external connectors.
+6. Radio bulk capacitance close to the SA818 supply entry.
 
-## 4. Schematic requirements generated from component choices
-
-1. DNP footprints for AF gain shaping and filtering.
-2. DNP footprint for PTT transistor stage if direct drive proves marginal.
-3. Ferrite-bead option between digital 3.3V and codec analog rail.
-4. USB-C sink CC resistors and ESD protection on external connectors.
-5. Radio supply bulk capacitance near SA818 power entry.
-6. Explicit `I2S_MCLK` net from ESP32-S3 to SGTL5000.
-
-## 5. Release gates for PCB Rev A
-
-A component set is considered validated for PCB when all of the following are true:
-1. Bench prototype confirms SA818 supply and PTT electrical behavior.
-2. Bench calibration identifies stable TX deviation settings.
-3. RX path demonstrates acceptable decode rate without clipping/noise floor collapse.
-4. No repeatable brownout/reset during TX cycles.
-5. BOM contains at least one purchasable candidate per line item with footprint compatibility.
-6. SGTL5000 clock tree is validated for selected sample rates.
+## PCB release gates
+1. SA818 supply droop and PTT polarity remain stable on the bench baseline.
+2. TX deviation has measured, repeatable attenuation values.
+3. RX decode remains repeatable on the proven SGTL5000 path.
+4. No brownout or reset occurs during repeated TX cycles.
+5. Every active BOM line has at least one real sourceable candidate and a verified package.

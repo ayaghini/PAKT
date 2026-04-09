@@ -1,29 +1,35 @@
 # Hardware Reference Library
 
-This folder organizes datasheet and application-note sources for the project's major hardware components.
+This folder holds the hardware references that feed schematic capture and PCB
+layout. The active baseline now follows the confirmed bench stack rather than
+earlier option-screening documents.
 
-Note: direct PDF download from this shell environment is blocked by network policy, so this library currently stores curated source links and retrieval instructions.
+## Active hardware baseline
+- MCU: Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM` as the bench-board baseline.
+- Radio: `SA818-V`.
+- Audio codec: `SGTL5000`.
+- GPS: u-blox `NEO-M9N` breakout/module baseline.
+- Fuel gauge: `MAX17048`.
+- Charger: `MCP73831T-2ACI/OT` topology baseline.
 
-## Components
-- `components/esp32-s3`
-- `components/sa818`
-- `components/sgtl5000` (current codec baseline)
-- `components/wm8960` (legacy reference only)
-- `components/neo-m8n`
-- `components/max17048` (current fuel-gauge baseline)
-- `components/max17043` (legacy alternate)
-- `components/mcp73831`
+## Reference-design anchor
+For battery charging and battery gauging, the custom PCB should follow the
+bench-board power behavior of the Adafruit ESP32-S3 Feather with `4MB Flash /
+2MB PSRAM`, because that is the board used on the bench and it matches the
+desired `MAX17048` fuel-gauge path.
+
+## Folder structure
+- `components/README.md` — active vs archived component folders.
+- `components/<part>/sources.md` — OEM datasheets, application notes, and reference-design links.
+- `components/<part>/cad_assets.md` — symbol, footprint, package, and model mapping for KiCad.
+- `components/<part>/symbols/` — local KiCad symbol libraries when needed.
+- `components/<part>/footprints/` — local KiCad footprint files when needed.
+- `components/<part>/step/` — STEP models if they are stored in-repo.
 
 ## Source policy
-- Prefer official manufacturer URLs.
-- If official PDF cannot be resolved, include a mirror and flag it as non-authoritative.
+- Prefer OEM product pages, datasheets, and application notes.
+- Keep breakout-board reference links separate from semiconductor OEM links.
+- Mark legacy or mirror references clearly.
 
-## CAD asset structure
-Each component folder now includes:
-- `cad_assets.md` for symbol/footprint/STEP tracking and verification notes.
-- `symbols/` for KiCad symbol libraries (`.kicad_sym`).
-- `footprints/` for KiCad footprint libraries (`.pretty` / `.kicad_mod`).
-- `step/` for 3D models (`.step` / `.stp`).
-
-Current import status and exact/provisional mapping is tracked in:
+Current asset status is tracked in:
 - `components/CAD_ASSET_STATUS.md`
