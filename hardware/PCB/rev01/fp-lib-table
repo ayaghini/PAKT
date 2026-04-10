@@ -1,0 +1,8 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "PAKT_RF_Module_Fp") (type "KiCad") (uri "${KIPRJMOD}/../../../docs/hardware/components/esp32-s3/footprints") (options "") (descr "PAKT ESP32 footprints"))
+  (lib (name "PAKT_Audio_Fp") (type "KiCad") (uri "${KIPRJMOD}/../../../docs/hardware/components/sgtl5000/footprints") (options "") (descr "PAKT audio footprints"))
+  (lib (name "PAKT_GPS_Fp") (type "KiCad") (uri "${KIPRJMOD}/../../../docs/hardware/components/neo-m8n/footprints") (options "") (descr "PAKT GPS footprints"))
+  (lib (name "PAKT_SA818_Fp") (type "KiCad") (uri "${KIPRJMOD}/../../../docs/hardware/components/sa818/footprints") (options "") (descr "PAKT SA818 footprints"))
+  (lib (name "PAKT_MAX17048_Fp") (type "KiCad") (uri "${KIPRJMOD}/../../../docs/hardware/components/max17048/footprints") (options "") (descr "PAKT MAX17048 footprints"))
+)

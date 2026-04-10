@@ -1,0 +1,9 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "PAKT_RF_Module_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/esp32-s3/symbols/RF_Module.kicad_sym")(options "")(descr "PAKT ESP32 symbols"))
+  (lib (name "PAKT_Audio_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/sgtl5000/symbols/Audio.kicad_sym")(options "")(descr "PAKT audio symbols"))
+  (lib (name "PAKT_GPS_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/neo-m8n/symbols/RF_GPS.kicad_sym")(options "")(descr "PAKT GPS symbols"))
+  (lib (name "PAKT_SA818_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/sa818/symbols/SA818S.kicad_sym")(options "")(descr "PAKT SA818 symbol"))
+  (lib (name "PAKT_MAX17048_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/max17048/symbols/MAX17048.kicad_sym")(options "")(descr "PAKT MAX17048 symbol"))
+  (lib (name "PAKT_MCP73831_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/mcp73831/symbols/MCP73831.kicad_sym")(options "")(descr "PAKT MCP73831 symbol"))
+)

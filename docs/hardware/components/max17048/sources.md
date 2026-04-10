@@ -20,3 +20,7 @@
 - `MAX17048` is the locked fuel-gauge baseline for the custom PCB.
 - The bench board is the Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM`.
 - Adafruit's current public Learn guide for that board identifies `MAX17048` as the battery gauge.
+- Datasheet capture notes for schematic:
+  - `VDD` bypass capacitor `0.1 uF` to GND is required.
+  - `QSTRT` should be tied to GND when unused.
+  - `ALRT`/`SDA`/`SCL` require system pullups when used.

@@ -1,0 +1,478 @@
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 1 -
+ Obtained CE international certification
+ Independent transmission and reception frequency
+ 38 levels of CTCSS, 166 levels of CDCSS
+ 1W high power, long distance
+Product Specification
+
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 2 -
+Catalogue
+Product SpecificationCatalogue .............................................................................................................................. - 1 -
+1. Descriptions ............................................................................................................................................................... - 2 -
+2. Features ...................................................................................................................................................................... - 3 -
+3. Application .................................................................................................................................................................- 3 -
+4. Internal block diagram ............................................................................................................................................... - 4 -
+5. Specification .............................................................................................................................................................. - 4 -
+6. Typical Application Schematic .................................................................................................................................. - 5 -
+7. Protocol ...................................................................................................................................................................... - 5 -
+8. Instructions .................................................................................................................................................................- 6 -
+9. Pin definition ............................................................................................................................................................- 10 -
+10. Mechanism Dimension(Unit:mm) ......................................................................................................................... - 11 -
+11. Order information ...................................................................................................................................................- 11 -
+12. FAQ ........................................................................................................................................................................ - 11 -
+Appendix 1：DEMO Board ........................................................................................................................................ - 12 -
+Appendix 2：Mute on the interface display and send correspondence table ............................................................. - 14 -
+Appendix 3：Analog subtone comparison table .........................................................................................................- 16 -
+Appendix 4：SMD Reflow Chart ............................................................................................................................... - 17 -
+Note: Revision History
+Revision Date Comment
+V1.0 2021-07-12 First release
+V1.1 2021-8 Update RXD Pin description
+V1.2 2023-8 Update frequency
+V1.3 2023-11 Update certification information
+V1.4 2024-10 Update frequency
+V1.5 2025-06 Update crystal oscillator parameters and operating frequency
+V1.6 2025-07 Update Command Instructions
+V1.7 2025-08 Update Command Instructions
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 3 -
+1. Descriptions
+SA818S is a cost-effective integrated professional walkie-talkie module, built-in high-speed
+microcontroller, high-performance RF transceiver chip and RF power amplifier, and provides a
+standard serial port to communicate with the module, so that the relevant parameters of the module and
+the transceiver can be set quickly and easily. Function to control. Users only need to connect an audio
+amplifier, microphone, and speaker to this module to work as a small walkie-talkie. The simplified
+interface and ultra-small size enable this module to be widely used, and it can also be easily and
+quickly embedded in various handheld devices to improve the overall performance of the terminal
+product. SA818S strictly uses lead-free technology for production and testing, and meets RoHS and
+Reach standards.
+The SA818S walkie-talkie module adds an LNA circuit on the basis of SA818, and the sensitivity is
+increased by 4dBm. For the entire frequency range of 400-470MHz, the power output fluctuation is
+less than 1dB, and the low power can achieve an error of 27dBm+/-1dBm from 400-470MHz. Note:
+The software and hardware interfaces are the same as before and are compatible with each other.
+The SA818S is strictly manufactured and tested using lead-free processes, complying with RoHS and
+Reach standards. The SA818S module is also available in a version that meets CE certification to cater
+to different market demands.
+2. Features
+ UHF band frequency: 400~480 MHz
+VHF band frequency: 134~174 MHz
+(Above 2 frequency bands are optional.
+Customized options are available for
+200–260 MHz and 470–520 MHz.)
+ Tx and Rx frequency, Tx and Rx CTCSS,
+CDCSS can be set alone.
+ Band width 12.5KHz / 25 KHz
+ Output power up to 1W
+ Distance up to 4-5km in open area
+ Sensitivity：-124 dBm
+ 38 CTCSS & 166 CDCSS
+ 8 level squelch
+ 8 adjustable volume
+ High/ low power is optional（500mW/1W）
+ Wide range of working voltage:3.3-5.5 V
+ High-integrated, Small Size
+ 0.5 ppm KDS TCXO crystal, Stable performance
+3. Application
+ small walkie talkie
+ Invisible intercom system
+ audio surveillance system
+ Outdoor Sport products
+ building community security system
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 4 -
+4. Internal block diagram
+5. Specification
+Parameter Test condition Min Typ. Max Unit
+Power supply 3.3 4.2 5.5 V
+Working Temperature range -30 25 70 ℃
+Current Consumption
+Sleep current ≤1 uA
+RX current 60 mA
+TX current（High power） 650 750 mA
+TX current（low power） 450 550 mA
+Transmitting RF Parameters
+Frequency range UHF 400 480 MHz
+VHF 134 174 MHz
+Out power（high power） @VCC=4.0V 28 29.5 31 dBm
+Out power（low power） 25 26.5 27 dBm
+Modulation frequency @1.5KHz/2.5KHz frequency
+deviation
+10 mV
+Audio modulation distortion 2 5 %
+SignaltoNoiseRatio 38 40 45 dB
+adjacent-channel power @12.5K offset -60dBc dBm
+CTCSS Modulation frequency 0.35 0.5 0.75 KHz
+Receiving RF Parameters
+Receiving sensitivity -124 dBm
+Receiving SNR @1.5KHz frequency deviation 45 50 dB
+Audio output amplitude 700 mV
+Audio Output impedance 200 OHm
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 5 -
+6. Typical Application Schematic
+7. Protocol
+The module provides a good user interface (standard serial port), users can send commands through
+the serial port to adjust and read the module's parameters. The memory is integrated inside the
+module, and the related parameters of the configuration can be stored when the power is off.
+ Command sending format:
+All commands begin with "AT" and end with <CR><LF>.
+After the module is running, the standard settings of the communication serial port are:
+Rate: 9600 bps Data bit: 8 bit Stop bit: 1 bit Parity bit: none
+ Command return format:
+Returns the character string related to the sending command, all ending with <CR><LF>.
+ Frame format definition:
+All commands in the communication protocol are transmitted in ASCII code.
+The terminal-to-module communication adopts the form: AT+DMOXXX
+The module adopts the form of terminal communication: +DMOXXX (Note: the terminal does not
+need to return)
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 6 -
+8. Instructions
+ AT+DMOCONNECT handshake command
+Description: The handshake command is intended to prove that the module is connected and
+operating normally. Each time the terminal is sent, the module will respond after receiving this
+command.
+Multiple response command; if the module does not respond to the 3-way handshake command, the
+terminal should restart the module.
+Format: AT+DMOCONNECT
+Example: AT+DMOCONNECT
+ +DMOCONNECT handshake response command
+Description: Module handshake response command, the module must respond immediately after
+receiving the DMOCONNECT command.
+Format: +DMOCONNECT:0
+Example: +DMOCONNECT:0
+Parameter description: 0 —> Normal working state
+ S+ sweep command
+Description: Set the frequency to be scanned.
+Format: S+scanRF
+Example: S+455.2250
+Parameter Description:
+scanRF: the frequency to be scanned
+ S=Sweep frequency response command
+Description: Sweep response command, the module will go to sweep after receiving the sweep
+command, and return the sweep result after sweeping the frequency
+Format: S=X
+Parameter X description: 0—>the frequency to be swept has a signal 1—>the frequency to be swept
+has no signal
+ AT+DMOSETGROUP set group command
+Description: Set the working parameters of the module.
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 7 -
+Format: AT+DMOSETGROUP=GBW, TFV, RFV, Tx_CXCSS, SQ, Rx_CXCSS
+Example 1: AT+DMOSETGROUP=0,415.1250,415.1250,0012,4,0013
+Example 2: AT+DMOSETGROUP=0,415.1250,415.1250,754N,4,445I
+Parameter Description:
+GBW: bandwidth setting (0: 12.5K 1: 25K)
+TFV: Transmit frequency value (134.0000M～174.0000M,400.0000M～470.0000M)
+RFV: Receiving frequency value (134.0000M～174.0000M,400.0000M～470.0000M)
+(Note: The transmitting frequency and receiving frequency can be the same or different, but the set
+frequency must be 12.5K and 25K.
+Integer multiples)
+Tx_CXCSS: Transmit CXCSS value
+SQ: Squelch level (0～8) (0: monitor mode, scan mode cannot be used 0)
+Rx_CXCSS: Receive CXCSS value
+(Note: different CXCSS values can be used for transmitting and receiving, 0000: no coding
+0001-0038: CTCSS
+Followed by letters: CDCSS, coding see appendix 1)
+ +DMOSETGROUP Set group response command
+Description: After the module receives the setting group command, it returns the operation result
+Format: +DMOSETGROUP:X
+Example: +DMOSETGROUP:0
+Parameter X description: 0 —> success, 1 —> data setting out of range
+ AT+DMOSETVOLUME set volume command
+Description: Set the volume level of the module
+Format: AT+DMOSETVOLUME=X
+Example: AT+DMOSETVOLUME=1
+Parameter X Description: The value of the volume level parameter is 1～8
+ +DMOSETVOLUME volume setting response command
+Description: Set the volume level of the module and answer the result
+Format: +DMOSETVOLUME:X
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 8 -
+Example: +DMOSETVOLUME:0
+Parameter X description: 0—>setting successful 1—>setting failed
+ AT+RSSI read signal strength command
+Description: Read the signal strength of the module
+Format: RSSI? Example: RSSI?
+ RSSI=XXX Read signal strength response command
+Description: Read the signal strength result response of the module
+Format: RSSI:XXX
+Example: RSSI:010
+Parameter X description: the current signal strength value, the larger the value, the stronger the signal
+strength
+ AT+SETFILTER Set filter command
+Description: Set the filter of the module
+Format: AT+SETFILTER=PRE/DE-EMPH,HIGHPASS,LOWPASS
+Example: AT+SETFILTER=0,0,0
+Parameter description: PRE/DE-EMPH, 0 means pre-emphasis/de-emphasis is on, 1 means
+pre-emphasis/de-emphasis is off;
+HIGHPASS, 0 means the high-pass filter is turned on, 1 means the high-pass filter is turned off;
+LOWPASS, 0 means the low-pass filter is turned on, and 1 means the low-pass filter is turned off;
+ +DMOSETFILTER filter setting response command
+ Description: Set the filter result response of the module
+Format: +DMOSETFILTER:X
+Example: +DMOSETFILTER:0
+Description of parameter X: 0—>setting successful 1—>setting failed
+ AT+SETTAIL Set tail command
+ Description: Turn on/off the emission tail tone of the module
+Format: AT+SETTAIL=X
+Example: AT+SETTAIL=0
+Parameter description: X, 0 means turn off the tail tone, 1 means turn on the tail tone;
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 9 -
+ +DMOSETTAIL End tone setting response command
+ Description: Set the end tone result response of the module
+Format: +DMOSETTAIL:X
+Example: +DMOSETTAIL:0
+Description of parameter X: 0—>setting successful 1—>setting failed
+ +DMOREADGROUP Read group command
+Description: Read the working parameters of the module AT+DMOREADGROUP
+Format: AT+DMOREADGROUP
+Example: AT+DMOREADGROUP
+ +DMOREADGROUP Read group response command
+Description: Read group command response
+Format: +DMOREADGROUP=GBW, TFV, RFV, Tx_CXCSS, SQ, Rx_CXCSS
+Example 1: +DMOREADGROUP:0,433.5000,433.5000,0000,1,0000
+Parameter Description:
+GBW: bandwidth setting (0: 12.5K 1: 25K)
+TFV: Transmit frequency value (134.0000M～174.0000M,400.0000M～470.0000M)
+RFV: Receiving frequency value (134.0000M～174.0000M,400.0000M～470.0000M)
+Tx_CXCSS: Transmit CXCSS value
+SQ: Squelch level (0～8) (0: monitor mode, scan mode cannot be used 0)
+Rx_CXCSS: Receive CXCSS value
+(Note: different CXCSS values can be used for transmitting and receiving, 0000: no coding
+0001-0038: CTCSS
+Followed by letters: CDCSS, coding see appendix 1)
+ AT+VERSION read version number command
+Description: Read the software version number of the module
+Format: AT+VERSION
+Example: AT+VERSION
+ +VERSION Read version number response command
+Description: Read version number response command
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 10 -
+Format: +VERSION:X
+Example: +VERSION:SA818_V5.0
+Parameter description: X —> module software version number
+9. Pin definition
+Pin NO. Pin name I/O state
+1 Audio ON
+Connected to audio power amplifier. When the module worked, it can
+control the extra audio amplifier automatically, it will output low level to
+turn on the amplifier and high level to turn off the amplifier.
+2 NC Not connected
+3 AF_OUT Audio output
+4 NC Not connected
+5 PTT Module Input, Transmitting/receiving control, "0" force the module to
+enter TX state; and "1" to Rx state
+6 PD Power Down control, "0" for power down mode; "1" for the normal work
+7 H/L
+high/low output power control; Leave open for high output power，low
+level to low output power. (Please kindly note: this pin can NOT be
+connected to VDD or high level of cmos output)
+8 VBAT Connect power positive
+9 GND Grounding
+10 GND Grounding
+11 NC Not connected
+12 ANT connect 50 ohm antenna
+13,14,15 NC Not connected
+16 RXD
+RXD of the module and connect to external TXD
+*Before enter sleep mode, user need to pull low RXD Pin
+to prevent current leakage or poor reset in the next time.
+17 TXD TXD of the module and connect to external RXD
+18 MIC_IN Microphone or line in
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 11 -
+10. Mechanism Dimension(Unit:mm)
+11. Order information
+Product Name Description
+SA818S-U Working frequency :400~480 MHz
+SA818S-V Working frequency: 134~174 MHz
+SA818S-CE Operating frequency band 400~480 MHz, CE certified version
+12. FAQ
+a) Why module can not communicate properly？
+1) Check if there is power connection error；
+2) Check if Module is in normal communication mode；
+3) Check if frequency, channel, and mute are same；
+4) Check if module is damaged；
+b) Why transmission distance is not far as it should be？
+1) Power supply ripple is too large；
+2) The antenna types do not match, or not installed properly；
+3) The same frequency interference；
+4) The surrounding environment is harsh, strong interference sources.
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 12 -
+Appendix 1：DEMO Board
+In additional, we provided DEMO Board for customers to debug the software program, test all the
+function and measure the distance. The figure shows as below:
+User can set related parameters through the buttons:
+1) Tx frequency：400 ~ 470 MHz
+2) Rx frequency：400 ~ 470 MHz
+3) Channel Bandwidth：12.5 KHz / 25KHz
+4) CTCSS：0 ~ 38
+5) CDCSS: 0—166
+6) Squelch：0 ~ 8
+7) Volume：1 ~ 8
+ Button Operation：
+1) SET button
+Press to enter setting mode.
+2) UP /Down button
+In setting mode, press to increase/decrease the setting item.
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 13 -
+3) PTT button
+If Not in setting mode, Press to talk,( Listen state when released)
+4) High/Low slide switch
+Switch to high/low output power
+Note: With data FLASH inside, all the setting parameters are saved and keep
+unchanged even power off.
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 14 -
+Appendix 2：Mute on the interface display and send correspondence table
+★ Note: N code is inverted corresponding to I code, such as 023N code is 023I code is
+inverted:023N=~023I=00110111111000111001000
+Code Transform Bit Pattern Hex Bit Pattern
+023I 11001000000111000110111 640E37
+025I 10101000000111101101011 540F6B
+026I 01101000000110111010011 340DD3
+031I 10011000000111111000101 4C0FC5
+032I 01011000000110101111101 2C0D7D
+043I 11000100000101101101101 620B6D
+047I 11100100000110111111000 720DF8
+051I 10010100000101010011111 4A0A9F
+054I 00110100000100101111011 1A097B
+065I 10101100000110001011101 560C5D
+071I 10011100000110011110011 4E0CF3
+072I 01011100000111001001011 2E0E4B
+073I 11011100000101100111010 6E0B3A
+074I 00111100000111100010111 1E0F17
+114I 00110010000101111010110 190BD6
+115I 10110010000111010100111 590EA7
+116I 01110010000110000011111 390C1F
+125I 10101010000111011110000 550EF0
+131I 10011010000111001011110 4D0E5E
+132I 01011010000110011100110 2D0CE6
+134I 00111010000110110111010 1D0DBA
+143I 11000110000101011110110 630AF6
+152I 01010110000100110111100 2B09BC
+155I 10110110000110110010001 5B0D91
+156I 01110110000111100101001 3B0F29
+162I 01001110000100111101011 2709EB
+165I 10101110000110111000110 570DC6
+172I 01011110000111111010000 2F0FD0
+174I 00111110000111010001100 1F0E8C
+205I 10100001000110010111011 508CBB
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 15 -
+223I 11001001000101110001011 648B8B
+226I 01101001000100001101111 34886F
+243I 11000101000111011010001 628ED1
+244I 00100101000101011111100 128AFC
+245I 10100101000111110001101 528F8D
+251I 10010101000111100100011 4A8F23
+261I 10001101000111101110100 468F74
+263I 11001101000100010111101 6688BD
+265I 10101101000100111100001 5689E1
+271I 10011101000100101001111 4E894F
+306I 01100011000111110011000 318F98
+311I 10010011000110110001110 498D8E
+315I 10110011000101100011011 598B1B
+331I 10011011000101111100010 4D8BE2
+343I 11000111000111101001010 638F4A
+346I 01100111000110010101110 338CAE
+351I 10010111000111010111000 4B8EB8
+364I 00101111000110100001011 178D0B
+365I 10101111000100001111010 57887A
+371I 10011111000100011010100 4F88D4
+411I 10010000100101101110111 484B77
+412I 01010000100100111001111 2849CF
+413I 11010000100110010111110 684CBE
+423I 11001000100110011101001 644CE9
+431I 10011000100110100011011 4C4D1B
+432I 01011000100111110100011 2C4FA3
+445I 10100100100100011101111 5248EF
+464I 00101100100101111110010 164BF2
+465I 10101100100111010000011 564E83
+466I 01101100100110000111011 364C3B
+503I 11000010100101100011110 614B1E
+506I 01100010100100011111010 3148FA
+516I 01110010100111011000001 394EC1
+532I 01011010100111000111000 2D4E38
+546I 01100110100101111001100 334BCC
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 16 -
+565I 10101110100111100011000 574F18
+606I 01100001100110011011101 30CCDD
+612I 01010001100110001110011 28CC73
+624I 00101001100110101111000 14CD78
+627I 11101001100111111000000 74CFC0
+631I 10011001100100010100111 4CC8A7
+632I 01011001100101000011111 2CCA1F
+654I 00110101100111000011001 1ACE19
+662I 01001101100111100010010 26CF12
+664I 00101101100111001001110 16CE4E
+703I 11000011100111010100010 61CEA2
+712I 01010011100110111101000 29CDE8
+723I 11001011100100011001110 65C8CE
+731I 10011011100100100111100 4DC93C
+732I 01011011100101110000100 2DCB84
+734I 00111011100101011011000 1DCAD8
+743I 11000111100110110010100 63CD94
+754I 00110111100111110000010 1BCF82
+Appendix 3：Analog subtone comparison table
+Subtone
+coding 1 2 3 4 5 6 7 8 9 10
+Sub-audio
+frequency 67 71.9 74.4 77 79.7 82.5 85.4 88.5 91.5 94.8
+Subtone
+coding 11 12 13 14 15 16 17 18 19 20
+Sub-audio
+frequency 97.4 100 103.5 107.2 110.9 114.8 118.8 123 127.3 131.8
+Subtone
+coding 21 22 23 24 25 26 27 28 29 30
+Sub-audio
+frequency 136.5 141.3 146.2 151.4 156.7 162.2 167.9 173.8 179.9 186.2
+Subtone
+coding 31 32 33 34 35 36 37 38
+Sub-audio
+frequency 192.8 203.5 210.7 218.1 225.7 233.6 241.8 250.3
+www.nicerf.com SA818S
+NiceRF Wireless Technology Co., Ltd. Rev 1.7
+sales@nicerf.com
+- 17 -
+Appendix 4：SMD Reflow Chart

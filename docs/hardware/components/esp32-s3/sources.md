@@ -3,6 +3,8 @@
 ## Official datasheets
 - ESP32-S3 Datasheet (Espressif PDF)
   - https://www.espressif.com/en/support/documents/technical-documents/datasheets/ESP32-S3-Datasheet.pdf
+- ESP32-S3-WROOM-1/WROOM-1U Datasheet (module-level)
+  - https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf
 - ESP32-S3 Technical Reference Manual (Espressif PDF)
   - https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf
 
@@ -21,3 +23,6 @@
 ## Notes
 - Use the Hardware Design Guidelines and errata as mandatory review before schematic freeze.
 - For this project, the exact bench board is the Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM`.
+- Module integration reminders for rev01:
+  - Preserve antenna keepout for `ESP32-S3-WROOM-1` PCB antenna.
+  - Keep EN/boot-strapping support network explicit in schematic.
