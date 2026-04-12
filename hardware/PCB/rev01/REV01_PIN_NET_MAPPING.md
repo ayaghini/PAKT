@@ -46,6 +46,20 @@ Use this file as the source of truth for routing and firmware pin assignment che
 | `VBCKP` | GPS backup rail | BT1+, U1 `V_BCKP`, D2 cathode |
 | `GPS_BCKP_CHG` | Backup charge feed | R17 output, D2 anode |
 
+### MAX17048 (U4) pin map (updated symbol)
+
+| U4 pin | Pin name | Intended net/function |
+|---|---|---|
+| 1 | `CTG` | Leave NC unless using external thermistor path |
+| 2 | `CELL` | `VBAT` battery sense |
+| 3 | `VDD` | `VBAT` supply |
+| 4 | `GND` | `GND` |
+| 5 | `*ALRT` | Alert output (`MAX17048_ALRT_N` if labeled) |
+| 6 | `QSTRT` | Quick-start control (`MAX17048_QSTRT`) |
+| 7 | `SCL` | `I2C_SCL` |
+| 8 | `SDA` | `I2C_SDA` |
+| 9 | `EPAD` | Tie to `GND` |
+
 ## 4) RF/Analog Paths
 
 ### SA818 TX/RF path
@@ -143,7 +157,7 @@ Use this map to replace remaining KiCad auto-nets (`Net-(...)`) with explicit na
 | `Net-(U2-EN)` | `ESP_EN` |
 | `Net-(U2-IO0)` | `ESP_IO0` |
 | `Net-(U4-QSTRT)` | `MAX17048_QSTRT` |
-| `Net-(U4-~{ALRT})` | `MAX17048_ALRT_N` |
+| `Net-(U4-*ALRT)` | `MAX17048_ALRT_N` |
 | `Net-(U5-H{slash}L)` | `SA818_HL` |
 | `Net-(U5-PD)` | `SA818_PD` |
 | `Net-(U6-PROG)` | `MCP73831_PROG` |
