@@ -410,8 +410,20 @@
   },
   "sheets": [
     [
-      "a8d282d5-3953-4507-87b7-862bf0376770",
+      "64745c3b-9140-45fa-99ac-121bd9bc3965",
       "Root"
+    ],
+    [
+      "8b65be9b-9983-4e35-9af2-8bb4e0b589e3",
+      "ESP_USB_POWER"
+    ],
+    [
+      "3e9aaa03-d691-43a3-b61b-cde79aa82889",
+      "GPS"
+    ],
+    [
+      "0028381b-ee31-4777-811f-d1aae0affb4d",
+      "SGTL_SA818"
     ]
   ],
   "text_variables": {}

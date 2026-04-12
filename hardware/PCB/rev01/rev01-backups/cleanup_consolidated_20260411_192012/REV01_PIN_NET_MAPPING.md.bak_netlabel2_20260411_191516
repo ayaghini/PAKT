@@ -57,39 +57,6 @@ Use this file as the source of truth for routing and firmware pin assignment che
 | `SA818_ANT` | U5 `ANT` | U9 `IN` |
 | `Net-(U9-OUT)` | U9 `OUT` | J2 center pin |
 
-### SGTL5000 bench-reference filtering additions (As currently placed, no AP7313)
-
-Use this as the recommended add-on set for SGTL5000 supply stability and cleaner analog behavior.
-
-| Ref | Value | Connect pin 1 to | Connect pin 2 to | Purpose |
-|---|---|---|---|---|
-| `C3` | `2.2u_SGTL_PRE` | `+3.3V` | `GND` | Pre-bead bulk decoupling |
-| `C4` | `2.2uf` | `+3.3V` | `GND` | Additional pre-bead bulk decoupling (as currently valued) |
-| `FB2` | `Murata BLM18PG121SN1D` | `+3.3V` | SGTL filtered rail feeding `VDDA` | Analog-domain HF isolation (same family as SA818 FB16) |
-| `C6` | `2.2u_SGTL_POST` | SGTL filtered rail (FB2 output) | `GND` | Post-bead bulk decoupling |
-| `C5` | `2.2uf` | SGTL filtered rail (FB2 output) | `GND` | Additional post-bead bulk decoupling (as currently valued) |
-| `C15` | `100n_SGTL_VAG` | `U3 VAG` | `GND` | Local VAG HF bypass (place close to U3 pin 5) |
-
-Recommended SGTL rail usage with the above:
-- `U3 VDDA` -> SGTL filtered rail from `FB2` output
-- `U3 VDDD` and `U3 VDDIO` -> `+3.3V` (or filtered rail if you intentionally choose single-rail codec power)
-- Keep `C11/C12/C13/C14` local to U3 pins as currently done.
-
-### GPS rail filtering additions (same ferrite family)
-
-| Ref | Value | Connect pin 1 to | Connect pin 2 to | Purpose |
-|---|---|---|---|---|
-| `FB1` | `Murata BLM18PG121SN1D` | `+3.3V` | GPS filtered rail feeding `U1 VCC` | Isolate GPS rail noise |
-| `C1` | `10u_GPS_RAIL` | GPS filtered rail (FB1 output) | `GND` | GPS local bulk decoupling |
-| `C2` | `100n_GPS_RAIL` | GPS filtered rail (FB1 output) | `GND` | GPS local HF bypass |
-
-Audio coupling note from bench reference:
-- Teensy Audio Adapter commonly uses `2.2uF` AC-coupling on line paths.
-- If you want to match that behavior, change `C16` and `C17` from `1u` to `2.2u`.
-
-Scope note:
-- microSD-related parts in the bench reference are intentionally excluded.
-
 ### GPS RF path
 
 | Net | From | To | Notes |
@@ -109,8 +76,6 @@ Scope note:
 
 - GPS: `BT1`, `D2`, `R17`, `J5`, `L3`, `R23`, `C26`, `R24`, `D4`
 - SA818 RF/power: `U9`, `J2`, `FB16`, `D15`, `C33`, `C8/C9/C10`
-- SGTL filter additions: `FB2`, `C3/C4/C5/C6`, `C15`
-- GPS rail filter additions: `FB1`, `C1/C2`
 - USB protection: `U8` (`USBLC6-2P6`)
 - Charger/fuel gauge core: `U6`, `U4`, `C18/C19/C20`, `R5`, `R10`, `R11`, `R12`
 - ESP boot/reset: `SW1`, `SW2`, `R13`, `R14`, `C21`
@@ -124,30 +89,3 @@ Scope note:
 - Charger nets are currently auto-named in schematic as `Net-(U6-PROG)` and `Net-(U6-STAT)`.
 - ESP EN/BOOT nets are currently auto-named in schematic as `Net-(U2-EN)` and `Net-(U2-IO0)`.
 - Keep `R17`/`D2` backup-charge path DNP unless backup chemistry supports recharge.
-
-## 8) Net Standardization Map
-
-Use this map to replace remaining KiCad auto-nets (`Net-(...)`) with explicit names.
-
-| Current Auto Net | Standard Name |
-|---|---|
-| `Net-(C26-Pad1)` | `GPS_RF_MATCH` |
-| `Net-(D1-K)` | `CHG_LED_N` |
-| `Net-(D4-A)` | `GPS_TIMEPULSE_LED` |
-| `Net-(D5-A)` | `USB_TVS_A` |
-| `Net-(D5-K)` | `USB_TVS_K` |
-| `Net-(D6-K)` | `VSYS_MAIN` |
-| `Net-(D15-K)` | `SA818_VBAT` |
-| `Net-(J4-CC1)` | `USB_CC1` |
-| `Net-(J4-CC2)` | `USB_CC2` |
-| `Net-(U2-EN)` | `ESP_EN` |
-| `Net-(U2-IO0)` | `ESP_IO0` |
-| `Net-(U4-QSTRT)` | `MAX17048_QSTRT` |
-| `Net-(U4-~{ALRT})` | `MAX17048_ALRT_N` |
-| `Net-(U5-H{slash}L)` | `SA818_HL` |
-| `Net-(U5-PD)` | `SA818_PD` |
-| `Net-(U6-PROG)` | `MCP73831_PROG` |
-| `Net-(U6-STAT)` | `CHG_STAT_N` |
-| `Net-(U6-VBAT)` | `MCP73831_VBAT` |
-| `Net-(U7-EN)` | `REG_EN` |
-| `Net-(U9-OUT)` | `SA818_RF_OUT` |

@@ -63,7 +63,7 @@ Requirements:
 | Feather GPIO | Net | Teensy Audio / SGTL5000 signal |
 |---|---|---|
 | GPIO8 | `I2S_BCLK` | `BCLK / SCLK` |
-| GPIO15 | `I2S_WS` | `LRCLK / WS` |
+| GPIO15 | `I2S_LRCLK` | `LRCLK / WS` |
 | GPIO12 | `I2S_DOUT` | `DIN` |
 | GPIO10 | `I2S_DIN` | `DOUT` |
 | GPIO14 | `I2S_MCLK` | `MCLK / SYS_MCLK` |
@@ -75,11 +75,20 @@ Requirements:
 ### 3.3 UARTs and control
 | Function | Feather GPIO | Net | Remote signal |
 |---|---|---|---|
-| GPS TX | GPIO17 | `GPS_RX_CTRL` | GPS RXD |
-| GPS RX | GPIO18 | `GPS_TX_NMEA` | GPS TXD |
-| Radio TX | GPIO13 | `SA818_RX_CTRL` | SA818 RXD |
-| Radio RX | GPIO9 | `SA818_TX_STAT` | SA818 TXD |
-| PTT | GPIO11 | `SA818_PTT` | SA818 PTT |
+| GPS TX | GPIO17 | `GPS_TXD` | GPS RXD |
+| GPS RX | GPIO18 | `GPS_RXD` | GPS TXD |
+| Radio TX | GPIO13 | `SA818_TXD` | SA818 RXD |
+| Radio RX | GPIO9 | `SA818_RXD` | SA818 TXD |
+| PTT | GPIO11 | `SA818_PTT_N` | SA818 PTT |
+
+### 3.4 USB data protection path (current schematic)
+| Segment | Net | Notes |
+|---|---|---|
+| USB-C connector side D+ | `DD+` | J4 A6/B6 to ESD input |
+| USB-C connector side D- | `DD-` | J4 A7/B7 to ESD input |
+| MCU side D+ | `USB_D_P` | ESD output to ESP32 USB_D+ |
+| MCU side D- | `USB_D_N` | ESD output to ESP32 USB_D- |
+| ESD IC | `U8 USBLC6-2P6` | Protects USB data pair |
 
 ## 4. Analog audio interconnect
 
@@ -87,6 +96,11 @@ Requirements:
 |---|---|---|---|
 | `SGTL5000 LINE_OUT_L` | `SA818 AF_IN` | `AF_TX_COUPLED` | `1 uF` AC coupling + attenuation pad |
 | `SA818 AF_OUT` | `SGTL5000 LINE_IN_L` | `AF_RX_COUPLED` | `1 uF` AC coupling + optional RC filter |
+
+RF path now present in rev01 schematic:
+- `SA818_ANT` from SA818 goes into `U9 (0500LP15A500E)` RF filter.
+- Filter output `Net-(U9-OUT)` goes to SMA connector `J2`.
+- GPS RF input uses `J5` plus L/C/R network (`L3`, `C26`, `R23`) tied to `VCCREF`.
 
 Bench-proven usage:
 - Headphone verification uses the PJRC 3.5 mm jack.
@@ -98,7 +112,9 @@ Bench-proven usage:
 ### 5.1 Rail strategy
 - For this prototype, battery management and charging are provided by the Feather board.
 - For the custom PCB, replicate the Adafruit ESP32-S3 Feather with `4MB Flash / 2MB PSRAM` battery behavior so the bench behavior carries forward.
-- Feed SA818 from a dedicated radio rail branch with local bulk capacitance.
+- Current rev01 schematic feeds SA818 through a dedicated branch:
+  - `VBAT` -> `FB16` -> `+5V_SA818` -> `D15` -> `Net-(D15-K)` -> SA818 `VBAT`.
+  - Local bulk caps on SA818 rail: `C8/C9/C10` and upstream `C33`.
 - Keep the codec on a clean `3.3V` domain, optionally filtered for analog use.
 
 ### 5.2 Prototype decoupling guidance
@@ -113,4 +129,6 @@ Bench-proven usage:
 ## 6. Open items before PCB capture
 - Replace provisional AF attenuation and filter values with measured bench values.
 - Record measured SA818 deviation and received AF levels from the working harness.
-- Freeze the exact ESP32 module and regulator parts for the KiCad schematic.
+- Decide whether to keep net auto-names (`Net-(...)`) or replace with stable named nets before final routing review.
+- Complete SGTL filtered-rail wiring using placed parts: `FB2` (`BLM18PG121SN1D`) with `C3/C4` on bead input side and `C6/C5` on bead output side; keep `C15` on `VAG`.
+- Complete GPS filtered-rail wiring using placed parts: `FB1` (`BLM18PG121SN1D`) + `C1 10u` + `C2 100n` on bead output side near `U1`.

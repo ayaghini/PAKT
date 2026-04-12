@@ -1,0 +1,13 @@
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "c4c7d308-73d3-46ec-974c-9e9422197832")
+	(paper "A4")
+	(title_block
+		(title "SGTL5000 + SA818")
+		(rev "rev01")
+	)
+	(lib_symbols)
+	(embedded_fonts no)
+)

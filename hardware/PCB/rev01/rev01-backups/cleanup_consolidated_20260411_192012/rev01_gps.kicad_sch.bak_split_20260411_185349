@@ -1,0 +1,13 @@
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "06b59d5b-6d18-4abd-a417-f2f37d29fb05")
+	(paper "A4")
+	(title_block
+		(title "GPS")
+		(rev "rev01")
+	)
+	(lib_symbols)
+	(embedded_fonts no)
+)
