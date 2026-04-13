@@ -43,6 +43,7 @@ inline constexpr bool kStartGpsTask      = true;
 inline constexpr bool kStartAprsTask     = true;
 inline constexpr bool kStartBleTask      = true;
 inline constexpr bool kStartPowerTask    = true;
+inline constexpr bool kStartDisplayTask  = true;
 
 inline constexpr bool kQuietCaptureMode  = false;
 inline constexpr LogVerbosity kLogVerbosity = LogVerbosity::Normal;

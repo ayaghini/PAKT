@@ -52,7 +52,23 @@ Notes:
 | SGTL5000 I2C address detected | 0x0A | | |
 | MAX17048 I2C address detected | 0x36 | | |
 | u-blox M9N I2C address detected | 0x42 | | |
+| SH1106 display I2C address detected | 0x3C or 0x3D | | |
 | I2C bus voltage | 3.3 V high | | |
+
+Notes:
+
+---
+
+## Step 4b — SH1106 display smoke test
+
+| Measurement | Expected | Measured | Pass? |
+|-------------|----------|----------|-------|
+| Display detected on I2C bus | yes | | |
+| Screen powers on cleanly | yes | | |
+| Top status row rendered | yes | | |
+| APRS message area rendered | yes | | |
+| Display stable during BLE/GPS/radio activity | yes | | |
+| Other I2C devices remain visible after display init | yes | | |
 
 Notes:
 

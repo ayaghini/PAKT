@@ -93,8 +93,25 @@ Record: paired successfully, auth error confirmed on unpaired write.
 2. [ ] Power on
 3. [ ] Ensure firmware starts `SYS_MCLK` before codec probing
 4. [ ] Run I2C scan firmware or monitor log for SGTL5000 detect message
-5. [ ] Expected I2C devices on the current harness: `0x0A` (SGTL5000), `0x36` (MAX17048), `0x42` (u-blox M9N)
+5. [ ] Expected I2C devices on the current harness: `0x0A` (SGTL5000), `0x36` (MAX17048), `0x42` (u-blox M9N), and the SH1106 display at `0x3C` or `0x3D`
 6. [ ] Serial log shows `Using SGTL5000 candidate address 0x0A` and successful codec init
+
+---
+
+## Step 4b — SH1106 display smoke test
+
+**Goal:** confirm the `1.3 inch IIC v2.0` display on the default I2C bus is detected and can render a basic system screen.
+
+1. [ ] Connect the SH1106 display to the Feather default I2C bus (`GPIO3` SDA, `GPIO4` SCL, `3.3V`, `GND`)
+2. [ ] Confirm the I2C scan shows the display at `0x3C` or `0x3D`
+3. [ ] Verify the display powers on without disturbing the other I2C devices
+4. [ ] Run a display smoke test that renders:
+   - top row: battery status, GPS status, current frequency
+   - main area: placeholder text or the most recent received APRS message
+5. [ ] Confirm the screen refresh remains stable while BLE, GPS, and radio tasks are running
+6. [ ] Confirm no I2C bus lockup or codec/GPS disappearance after repeated resets
+
+Record: detected I2C address, refresh behavior, any visual corruption, and whether the display introduces bus instability.
 
 ---
 
@@ -199,6 +216,7 @@ Current verified note from 2026-03-28:
 - the shared Feather I2C/STEMMA GPS path is now working on the current prototype
 - GPS telemetry is reaching the app over BLE
 - this step should now treat shared-I2C GPS transport as the known-good baseline; remaining work is fix timing, repeatability, and longer-run validation
+- the SH1106 display now shares this same default I2C path, so GPS validation should also confirm display updates remain stable while GPS traffic is active
 
 ---
 

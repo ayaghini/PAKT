@@ -4,15 +4,17 @@
 // (Step 0); full drivers are added in Steps 1-6.
 //
 // Priority policy (higher number = higher priority in FreeRTOS):
-//   power  2  – background, non-time-critical
-//   ble    4  – rate-limited by contract; must not starve modem
-//   gps    5  – UART stream, moderate latency tolerance
-//   aprs   5  – packet state machine
-//   radio  7  – UART to SA818, timing-sensitive
-//   audio  8  – I2S read/write, real-time critical
+//   power    2  – background, non-time-critical
+//   display  3  – SH1106 OLED UI, 2 Hz refresh, preemptable by all protocol tasks
+//   ble      4  – rate-limited by contract; must not starve modem
+//   gps      5  – UART stream, moderate latency tolerance
+//   aprs     5  – packet state machine
+//   radio    7  – UART to SA818, timing-sensitive
+//   audio    8  – I2S read/write, real-time critical
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_task_wdt.h"
@@ -36,12 +38,15 @@
 #include "pakt/Aprs.h"
 #include "pakt/Sa818Radio.h"
 #include "pakt/Telemetry.h"
+#include "pakt/DisplaySH1106.h"
 #include "NvsStorage.h"
 #include "Sa818UartTransport.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/i2s_std.h"
+#include "driver/usb_serial_jtag.h"
 #include "driver/uart.h"
+#include "esp_adc/adc_oneshot.h"
 #include "esp_heap_caps.h"
 #include "esp_psram.h"
 #include <atomic>
@@ -129,6 +134,21 @@ static std::atomic<uint32_t> g_rx_clip_count{0};
 // (SGTL5000 CHIP_ANA_ADC_CTRL, both channels).
 // Set by aprs_task bench gain sweep; audio_task applies in its per-second tick.
 static std::atomic<uint8_t>  g_adc_gain_req{0};
+
+// ── Battery telemetry (written by power_task, read by display_task) ───────────
+// Value 255 in g_batt_pct means "not yet measured / unknown".
+// These will be populated when power_task gains full MAX17048 support.
+static std::atomic<float>   g_batt_voltage_v{0.0f};
+static std::atomic<uint8_t> g_batt_pct{255};
+static std::atomic<bool>    g_batt_charging{false};
+static std::atomic<bool>    g_usb_present{false};
+
+// ── Last received APRS message text (written by aprs_task, read by display_task)
+// Protected by g_aprs_rx_text_mutex so both sides see a consistent string.
+// aprs_task writes TNC2-formatted string (e.g. "N0CALL>APRS,RELAY*:/pos...")
+// on each decoded packet; display_task copies under mutex at ~2 Hz refresh.
+static SemaphoreHandle_t g_aprs_rx_text_mutex = nullptr;
+static char              g_aprs_rx_text[224]  = ""; // up to 223 chars + NUL
 
 // PCM snapshot: 1024 raw mono int16 samples captured on demand.
 // arm : aprs_task sets true; audio_task clears when collection starts.
@@ -610,6 +630,7 @@ static void watchdog_task(void *arg);
 static void gps_task(void *arg);
 static void ble_task(void *arg);
 static void power_task(void *arg);
+static void display_task(void *arg);
 
 // ── app_main ─────────────────────────────────────────────────────────────────
 
@@ -647,6 +668,9 @@ extern "C" void app_main(void)
         }
     }
 
+    // Mutex protecting g_aprs_rx_text; must exist before any task that touches it.
+    g_aprs_rx_text_mutex = xSemaphoreCreateMutex();
+
     if constexpr (pakt::benchcfg::kStartAudioTask) {
         xTaskCreate(audio_task, "audio", 8192, nullptr, 8, nullptr);
     }
@@ -665,8 +689,15 @@ extern "C" void app_main(void)
     if constexpr (pakt::benchcfg::kStartBleTask) {
         xTaskCreate(ble_task, "ble", 8192, nullptr, 4, nullptr);
     }
+    if constexpr (pakt::benchcfg::kStartDisplayTask) {
+        // Priority 3: lower than BLE (4) so it never competes with protocol tasks;
+        // higher than power (2) so background battery sampling can't starve the display.
+        // Stack: 3 KB covers snprintf formatting + SH1106 flush path.
+        xTaskCreate(display_task, "display", 3072, nullptr, 3, nullptr);
+    }
     if constexpr (pakt::benchcfg::kStartPowerTask) {
-        xTaskCreate(power_task, "power", 2048, nullptr, 2, nullptr);
+        // Stack: 4 KB leaves headroom for ADC setup, I2C reads, and logging.
+        xTaskCreate(power_task, "power", 4096, nullptr, 2, nullptr);
     }
 
     ESP_LOGI(TAG, "Selected tasks created");
@@ -2635,6 +2666,16 @@ static void aprs_task(void *arg)
                     }
                 }
 
+                // Update display text (non-blocking; skip if display_task holds mutex).
+                // Stores the TNC2 string so display_task can show the most recent
+                // received packet without needing queue depth or blocking.
+                if (g_aprs_rx_text_mutex &&
+                    xSemaphoreTake(g_aprs_rx_text_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+                    std::strncpy(g_aprs_rx_text, tnc2_log, sizeof(g_aprs_rx_text) - 1);
+                    g_aprs_rx_text[sizeof(g_aprs_rx_text) - 1] = '\0';
+                    xSemaphoreGive(g_aprs_rx_text_mutex);
+                }
+
                 // 1. Native rx_packet notify (PAKT BLE clients, e.g. desktop/iOS app)
                 //    Native clients consume human-readable TNC2 monitor strings.
                 if (!pakt::BleServer::instance().notify_rx_packet(
@@ -3188,7 +3229,380 @@ static void ble_task(void *arg)
 
 static void power_task(void *arg)
 {
-    // Step 7: MAX17048 fuel gauge + charging telemetry
-    ESP_LOGI("power", "task started (stub)");
-    for (;;) { vTaskDelay(pdMS_TO_TICKS(5000)); }
+    // Step 7: MAX17048 fuel gauge (FW-007).
+    //
+    // MAX17048 is a 1-cell LiPo fuel gauge on the shared I2C bus at 0x36.
+    // Registers (all 16-bit, big-endian):
+    //   0x02 VCELL – cell voltage; bits [15:4] × 1.25 mV → range 0–5.115 V.
+    //   0x04 SOC   – state of charge; byte 0 = integer %, byte 1 = 1/256 %.
+    //
+    // Publishes to g_batt_voltage_v and g_batt_pct (read by display_task).
+    // g_batt_pct = 255 until the first successful read (display shows empty shell).
+
+    static constexpr uint8_t    kBattI2cAddr   = 0x36;
+    static constexpr uint32_t   kTickMs        = 5000; // read cadence (5 s is ample)
+    static constexpr gpio_num_t kVbusSensePin = GPIO_NUM_34;
+
+    ESP_LOGI("power", "task started (MAX17048)");
+
+    // ── Wait for shared I2C bus ───────────────────────────────────────────────
+    for (int w = 0; w < 100 && g_shared_i2c_bus == nullptr; ++w) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    if (g_shared_i2c_bus == nullptr) {
+        ESP_LOGW("power", "I2C bus not available – battery monitoring disabled");
+        for (;;) { vTaskDelay(pdMS_TO_TICKS(kTickMs)); }
+    }
+
+    // USB presence is used to label charging state on the status bar.
+    // Prefer the native USB Serial/JTAG connection state while the bench is
+    // connected to a host. GPIO34 is kept as a best-effort board-level fallback.
+    gpio_config_t vbus_cfg = {};
+    vbus_cfg.pin_bit_mask = (1ULL << kVbusSensePin);
+    vbus_cfg.mode         = GPIO_MODE_INPUT;
+    vbus_cfg.pull_up_en   = GPIO_PULLUP_DISABLE;
+    vbus_cfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    vbus_cfg.intr_type    = GPIO_INTR_DISABLE;
+    gpio_config(&vbus_cfg);
+
+    auto sample_usb_present = [&]() -> bool {
+        return usb_serial_jtag_is_connected() || (gpio_get_level(kVbusSensePin) != 0);
+    };
+
+    g_usb_present.store(sample_usb_present(), std::memory_order_relaxed);
+    ESP_LOGI("power", "USB present: usj=%d gpio34=%d effective=%d",
+             static_cast<int>(usb_serial_jtag_is_connected()),
+             gpio_get_level(kVbusSensePin),
+             static_cast<int>(g_usb_present.load(std::memory_order_relaxed)));
+
+    // ADC fallback path for Feather VBAT divider on GPIO2 / ADC1_CH1.
+    adc_oneshot_unit_handle_t adc_handle = nullptr;
+    {
+        adc_oneshot_unit_init_cfg_t adc_unit_cfg = {};
+        adc_unit_cfg.unit_id = ADC_UNIT_1;
+        if (adc_oneshot_new_unit(&adc_unit_cfg, &adc_handle) != ESP_OK) {
+            ESP_LOGW("power", "ADC init failed – battery fallback unavailable");
+            adc_handle = nullptr;
+        }
+    }
+    if (adc_handle) {
+        adc_oneshot_chan_cfg_t adc_chan_cfg = {};
+        adc_chan_cfg.atten    = ADC_ATTEN_DB_12;
+        adc_chan_cfg.bitwidth = ADC_BITWIDTH_DEFAULT;
+        if (adc_oneshot_config_channel(adc_handle, ADC_CHANNEL_1, &adc_chan_cfg) != ESP_OK) {
+            ESP_LOGW("power", "ADC channel config failed – battery fallback unavailable");
+            adc_oneshot_del_unit(adc_handle);
+            adc_handle = nullptr;
+        }
+    }
+
+    i2c_master_dev_handle_t batt_dev = nullptr;
+    bool                    batt_via_max17048 = false;
+    bool                    logged_adc_mode   = false;
+    bool                    logged_max_mode   = false;
+    int                     max_fail_streak   = 0;
+
+    auto update_charge_state = [&]() {
+        const bool usb_present = sample_usb_present();
+        g_usb_present.store(usb_present, std::memory_order_relaxed);
+
+        const uint8_t pct = g_batt_pct.load(std::memory_order_relaxed);
+        const bool charging = usb_present && pct != 255 && pct < 100;
+        g_batt_charging.store(charging, std::memory_order_relaxed);
+    };
+
+    auto read_adc_fallback = [&]() -> bool {
+        if (!adc_handle) return false;
+
+        int32_t sum = 0;
+        int     ok  = 0;
+        for (int s = 0; s < 4; ++s) {
+            int raw = 0;
+            if (adc_oneshot_read(adc_handle, ADC_CHANNEL_1, &raw) == ESP_OK) {
+                sum += raw;
+                ++ok;
+            }
+        }
+        if (ok == 0) return false;
+
+        const float adc_v = static_cast<float>(sum / ok) / 4095.0f * 3.1f;
+        const float vbat  = adc_v * 2.0f;
+        g_batt_voltage_v.store(vbat, std::memory_order_relaxed);
+
+        float pct_f = (vbat - 3.2f) * 100.0f;
+        if (pct_f < 0.0f)   pct_f = 0.0f;
+        if (pct_f > 100.0f) pct_f = 100.0f;
+        g_batt_pct.store(static_cast<uint8_t>(pct_f), std::memory_order_relaxed);
+        update_charge_state();
+
+        ESP_LOGD("power", "ADC raw=%d  vbat=%.3fV  pct=%u%% usb=%d charging=%d",
+                 sum / ok, vbat,
+                 static_cast<unsigned>(g_batt_pct.load(std::memory_order_relaxed)),
+                 static_cast<int>(g_usb_present.load(std::memory_order_relaxed)),
+                 static_cast<int>(g_batt_charging.load(std::memory_order_relaxed)));
+        return true;
+    };
+
+    auto try_open_max17048 = [&]() -> bool {
+        if (batt_dev) return true;
+
+        i2c_device_config_t cfg = {};
+        cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        cfg.device_address  = kBattI2cAddr;
+        cfg.scl_speed_hz    = 100000;
+        const esp_err_t err = i2c_master_bus_add_device(g_shared_i2c_bus, &cfg, &batt_dev);
+        if (err != ESP_OK) {
+            ESP_LOGW("power", "MAX17048 add-device failed: %s", esp_err_to_name(err));
+            batt_dev = nullptr;
+            return false;
+        }
+        return true;
+    };
+
+    auto try_read_max17048 = [&]() -> bool {
+        if (!batt_dev) return false;
+
+        bool ok_any = false;
+
+        {
+            const uint8_t reg = 0x02;
+            uint8_t buf[2] = {};
+            if (i2c_master_transmit_receive(batt_dev, &reg, 1, buf, 2, 50) == ESP_OK) {
+                const uint16_t raw = (static_cast<uint16_t>(buf[0]) << 8) | buf[1];
+                const float voltage = static_cast<float>(raw >> 4) * 0.00125f;
+                g_batt_voltage_v.store(voltage, std::memory_order_relaxed);
+                ok_any = true;
+                ESP_LOGD("power", "MAX17048 VCELL=0x%04X  %.3fV", raw, voltage);
+            }
+        }
+
+        {
+            const uint8_t reg = 0x04;
+            uint8_t buf[2] = {};
+            if (i2c_master_transmit_receive(batt_dev, &reg, 1, buf, 2, 50) == ESP_OK) {
+                uint8_t pct = buf[0];
+                if (pct > 100) pct = 100;
+                g_batt_pct.store(pct, std::memory_order_relaxed);
+                ok_any = true;
+                ESP_LOGD("power", "MAX17048 SOC=%u%%", static_cast<unsigned>(pct));
+            }
+        }
+
+        if (ok_any) update_charge_state();
+        return ok_any;
+    };
+
+    // ── Read loop ─────────────────────────────────────────────────────────────
+    for (;;) {
+        update_charge_state();
+
+        bool gauge_ok = false;
+        if (try_open_max17048()) {
+            gauge_ok = try_read_max17048();
+        }
+
+        if (gauge_ok) {
+            max_fail_streak = 0;
+            if (!logged_max_mode) {
+                ESP_LOGI("power", "MAX17048 battery monitoring active");
+                logged_max_mode = true;
+                logged_adc_mode = false;
+            }
+            batt_via_max17048 = true;
+        } else {
+            ++max_fail_streak;
+            if (batt_via_max17048 && max_fail_streak >= 3 && batt_dev) {
+                ESP_LOGW("power", "MAX17048 read lost; dropping back to retry/fallback mode");
+                i2c_master_bus_rm_device(batt_dev);
+                batt_dev = nullptr;
+                batt_via_max17048 = false;
+            }
+
+            if (read_adc_fallback()) {
+                if (!logged_adc_mode) {
+                    ESP_LOGI("power", "MAX17048 unavailable/busy; ADC VBAT fallback active");
+                    logged_adc_mode = true;
+                    logged_max_mode = false;
+                }
+            } else if (g_batt_pct.load(std::memory_order_relaxed) == 255) {
+                update_charge_state();
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(kTickMs));
+    }
+}
+
+// ── display_task ──────────────────────────────────────────────────────────────
+//
+// Priority 3 – lower than all protocol tasks; never blocks I2C for more than
+// ~25 ms per flush cycle (16 page writes @ 100 kHz ≈ 23 ms).
+//
+// Shares the I2C bus with SGTL5000 (audio_task, 0x0A), u-blox M9N (gps_task,
+// 0x42), and MAX17048 (power_task, 0x36 – planned).  All accesses are via
+// ESP-IDF i2c_master_transmit() which is bus-arbitrated and therefore
+// safe for concurrent multi-task use.
+//
+// UI layout (128 × 64 px, 6 × 8 cell grid = 21 cols × 8 rows):
+//
+//   Row 0  │ B:87%  G:FIX  144.390          │  status bar
+//          ┄─────────────────────────────────┄  pixel hline at y=7
+//   Row 1  │ APRS RX:                        │  label
+//   Row 2  │ <source>><dest>,<path>:         │  ┐
+//   Row 3  │ <info line 1>                   │  │ message
+//   Row 4  │ <info line 2>                   │  │ (word-wrapped,
+//   Row 5  │ <info line 3>                   │  │  6 rows × 21 chars)
+//   Row 6  │ <info line 4>                   │  │
+//   Row 7  │ <info line 5>                   │  ┘
+//
+// When no packet has been received: rows 2-7 show "-- no message yet --".
+
+static void display_task(void *arg)
+{
+    static constexpr uint32_t kTickMs    = 500;  // display refresh period
+    static constexpr int      kMsgStartRow = 2;  // first row for message text
+    static constexpr int      kMsgRows     = 6;  // rows 2-7
+    static char               s_last_msg[sizeof(g_aprs_rx_text)] = "";
+
+    ESP_LOGI("display", "task started");
+
+    // ── Wait for shared I2C bus (published by audio_task) ────────────────────
+    for (int wait = 0; wait < 150 && g_shared_i2c_bus == nullptr; ++wait) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    if (g_shared_i2c_bus == nullptr) {
+        ESP_LOGW("display", "shared I2C bus not available – display task exiting");
+        vTaskDelete(nullptr);
+        return;
+    }
+
+    // ── Probe and initialise display ─────────────────────────────────────────
+    static pakt::DisplaySH1106 oled; // static: keeps 1 KB framebuffer off stack
+    bool oled_ready = oled.init(g_shared_i2c_bus, 0x3C);
+    if (!oled_ready) {
+        ESP_LOGI("display", "SH1106 not found at 0x3C, trying 0x3D");
+        oled_ready = oled.init(g_shared_i2c_bus, 0x3D);
+    }
+    if (!oled_ready) {
+        // Display not present.  Log once and park the task at low rate.
+        // Keeps the task alive so a hot-plug display could be supported later
+        // without a firmware restart – but does not poll aggressively.
+        ESP_LOGI("display", "No display found; task idle");
+        for (;;) { vTaskDelay(pdMS_TO_TICKS(30000)); }
+    }
+
+    // ── Main render loop ─────────────────────────────────────────────────────
+    for (;;) {
+        oled.clear();
+
+        // ── Row 0: status bar ─────────────────────────────────────────────
+        //
+        // Pixel layout (128 px / 21 char row):
+        //   px  0–11  : battery icon (12 px)
+        //   col 2..4  : battery text, e.g. "85+" / "100" / "-- "
+        //   px 31–39  : satellite icon (9 px)
+        //   col 7..8  : sat count
+        //   col 10..16: frequency, e.g. "144.390"
+        {
+            // Battery icon at px=0, py=0.
+            // g_batt_pct: 0-100 = charge level, 255 = unknown (empty shell).
+            const uint8_t batt_pct = g_batt_pct.load(std::memory_order_relaxed);
+            oled.draw_battery_icon(0, 0, batt_pct);
+
+            char batt_str[5] = {};
+            if (batt_pct == 255) {
+                snprintf(batt_str, sizeof(batt_str), "-- ");
+            } else {
+                snprintf(batt_str, sizeof(batt_str), "%2u%c",
+                         static_cast<unsigned>(batt_pct),
+                         g_batt_charging.load(std::memory_order_relaxed) ? '+' : ' ');
+            }
+            oled.draw_text(2, 0, batt_str);
+
+            // Satellite icon at px=31, py=0.
+            // Thick panels when GPS fix valid, thin panels when searching.
+            const bool gps_ok = g_gps_fix_valid.load(std::memory_order_relaxed);
+            oled.draw_sat_icon(31, 0, gps_ok);
+
+            // Satellite count at col 7 (px=42): 2 chars, right-aligned.
+            const uint8_t sats = g_gps_sats_used.load(std::memory_order_relaxed);
+            char sat_str[4];
+            snprintf(sat_str, sizeof(sat_str), "%2u", static_cast<unsigned>(sats));
+            oled.draw_text(7, 0, sat_str);
+
+            // Frequency text at col 10 (px=60): "144.390" (7 chars).
+            const uint32_t freq_hz = g_radio_rx_freq_hz.load(std::memory_order_relaxed);
+            const uint32_t mhz  = freq_hz / 1000000U;
+            const uint32_t khz3 = (freq_hz % 1000000U) / 1000U;
+            char freq_str[10];
+            snprintf(freq_str, sizeof(freq_str), "%3" PRIu32 ".%03" PRIu32, mhz, khz3);
+            oled.draw_text(10, 0, freq_str);
+        }
+
+        // Separator: pixel hline at bottom of row 0 (y = 7).
+        oled.draw_hline(7);
+
+        // ── Row 1: section label ──────────────────────────────────────────
+        oled.draw_text(0, 1, "APRS RX:");
+
+        // ── Rows 2–7: last received message (word-wrapped) ────────────────
+        {
+            // Copy message under mutex (non-blocking: skip if busy, show stale).
+            char msg[sizeof(g_aprs_rx_text)] = {};
+            if (g_aprs_rx_text_mutex &&
+                xSemaphoreTake(g_aprs_rx_text_mutex, 0) == pdTRUE) {
+                std::memcpy(msg, g_aprs_rx_text, sizeof(msg));
+                xSemaphoreGive(g_aprs_rx_text_mutex);
+                if (msg[0] != '\0') {
+                    std::memcpy(s_last_msg, msg, sizeof(s_last_msg));
+                    s_last_msg[sizeof(s_last_msg) - 1] = '\0';
+                }
+            } else if (s_last_msg[0] != '\0') {
+                // Mutex busy: keep showing the last successfully copied message.
+                std::memcpy(msg, s_last_msg, sizeof(msg));
+            }
+
+            if (msg[0] == '\0') {
+                // No packet received yet.
+                oled.draw_text(0, kMsgStartRow, "-- no message yet --");
+            } else {
+                // Word-wrap msg across kMsgRows rows, kCols (21) chars per row.
+                // Prefer breaking at spaces; hard-break if no space fits.
+                static constexpr int kCols = pakt::DisplaySH1106::kCols;
+                const char *p   = msg;
+                int         row = kMsgStartRow;
+
+                while (*p && row < kMsgStartRow + kMsgRows) {
+                    // How many characters remain?
+                    const int remain = static_cast<int>(std::strlen(p));
+                    if (remain <= kCols) {
+                        // Fits on one line – draw and done.
+                        oled.draw_text(0, row, p);
+                        break;
+                    }
+
+                    // Find last space within the first kCols characters.
+                    int break_at = kCols;
+                    for (int i = kCols - 1; i >= 1; --i) {
+                        if (p[i] == ' ') { break_at = i; break; }
+                    }
+
+                    // Draw up to break_at chars then advance past the break.
+                    char line[pakt::DisplaySH1106::kCols + 1];
+                    std::memcpy(line, p, static_cast<size_t>(break_at));
+                    line[break_at] = '\0';
+                    oled.draw_text(0, row, line);
+
+                    // Skip the space (if we broke at one) so the next line
+                    // doesn't start with a leading space.
+                    p += break_at;
+                    if (*p == ' ') ++p;
+                    ++row;
+                }
+            }
+        }
+
+        oled.flush();
+        vTaskDelay(pdMS_TO_TICKS(kTickMs));
+    }
 }

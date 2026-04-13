@@ -5,6 +5,7 @@ Bench stack:
 - Teensy Audio Adapter Rev D (`SGTL5000`)
 - `SA818-V`
 - u-blox `M9N`
+- `1.3 inch IIC v2.0` OLED display with `SH1106` controller on the default I2C bus
 
 Goal:
 - Use one wiring plan for prototype bring-up and later PCB migration.
@@ -37,6 +38,7 @@ flowchart LR
     FEATHER -->|3V3 + GND| AUDIO["Teensy Audio Adapter Rev D\nSGTL5000"]
     FEATHER -->|UART + PTT + GND| SA["SA818-V"]
     FEATHER -->|I2C + optional UART fallback| GPS["u-blox M9N"]
+    FEATHER -->|I2C SDA/SCL| OLED["1.3 inch OLED\nSH1106"]
 
     FEATHER -->|I2C SDA/SCL| AUDIO
     FEATHER -->|I2S BCLK/LRCLK/DOUT/DIN/MCLK| AUDIO
@@ -51,13 +53,14 @@ flowchart LR
 ### 3.1 I2C control bus
 | Feather GPIO | Net | Connects to |
 |---|---|---|
-| GPIO3 | `I2C_SDA` | SGTL5000 SDA, MAX17048 SDA, GPS SDA |
-| GPIO4 | `I2C_SCL` | SGTL5000 SCL, MAX17048 SCL, GPS SCL |
+| GPIO3 | `I2C_SDA` | SGTL5000 SDA, MAX17048 SDA, GPS SDA, SH1106 SDA |
+| GPIO4 | `I2C_SCL` | SGTL5000 SCL, MAX17048 SCL, GPS SCL, SH1106 SCL |
 
 Requirements:
 - One pull-up set only on the bus.
-- Bench-verified bus members are `SGTL5000 @ 0x0A`, `MAX17048 @ 0x36`, and `u-blox M9N @ 0x42`.
+- Bench bus members now include `SGTL5000 @ 0x0A`, `MAX17048 @ 0x36`, `u-blox M9N @ 0x42`, and the SH1106 display at the module's fitted address, typically `0x3C` and occasionally `0x3D`.
 - The SGTL5000 appears on I2C only after `SYS_MCLK` is active.
+- Confirm the SH1106 module does not add pull-ups strong enough to overload the existing bus pull-ups.
 
 ### 3.2 I2S audio bus
 | Feather GPIO | Net | Teensy Audio / SGTL5000 signal |
@@ -132,3 +135,4 @@ Bench-proven usage:
 - Decide whether to keep net auto-names (`Net-(...)`) or replace with stable named nets before final routing review.
 - Complete SGTL filtered-rail wiring using placed parts: `FB2` (`BLM18PG121SN1D`) with `C3/C4` on bead input side and `C6/C5` on bead output side; keep `C15` on `VAG`.
 - Complete GPS filtered-rail wiring using placed parts: `FB1` (`BLM18PG121SN1D`) + `C1 10u` + `C2 100n` on bead output side near `U1`.
+- Add a display status screen on the SH1106 that mirrors the bench system state: top bar for battery, GPS, and frequency; main area for received APRS traffic.
