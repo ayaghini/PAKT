@@ -7,4 +7,6 @@
   (lib (name "PAKT_MAX17048_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/max17048/MAX17048/MAX17048.kicad_sym")(options "")(descr "PAKT MAX17048 symbol"))
   (lib (name "PAKT_MCP73831_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/mcp73831/symbols/MCP73831.kicad_sym")(options "")(descr "PAKT MCP73831 symbol"))
   (lib (name "PAKT_AP7313_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/AP7313_15SAG_7/AP7313_15SAG_7.kicad_sym")(options "")(descr "PAKT AP7313 symbol"))
+  (lib (name "PAKT_PTS_647_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/PTS_647_SN50_SMTR2_LFS/PTS_647_SN50_SMTR2_LFS.kicad_sym")(options "")(descr "PAKT tactile pb symbol"))
+  (lib (name "PAKT_SW_JS102011SAQN_Sym")(type "KiCad")(uri "${KIPRJMOD}/../../../docs/hardware/components/Slide_switch/JS102011SAQN.kicad_sym")(options "")(descr "PAKT slide switch symbol"))
 )

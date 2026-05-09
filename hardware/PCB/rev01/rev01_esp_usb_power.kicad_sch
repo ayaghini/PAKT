@@ -6709,6 +6709,172 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "PAKT_SW_JS102011SAQN_Sym:JS102011SAQN"
+			(pin_names
+				(offset 1.016)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "S"
+				(at -7.6229 5.0819 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left bottom)
+				)
+			)
+			(property "Value" "JS102011SAQN"
+				(at -7.6286 -5.0857 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left bottom)
+				)
+			)
+			(property "Footprint" "JS102011SAQN:SW_JS102011SAQN"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify bottom)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "MANUFACTURER" "C&K"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify bottom)
+					(hide yes)
+				)
+			)
+			(symbol "JS102011SAQN_0_0"
+				(circle
+					(center -1.778 2.54)
+					(radius 0.568)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center -1.778 -2.54)
+					(radius 0.568)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.016 0) (xy -2.286 2.032)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 1.778 0)
+					(radius 0.568)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -7.62 2.54 0)
+					(length 5.08)
+					(name "~"
+						(effects
+							(font
+								(size 1.016 1.016)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.016 1.016)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -7.62 -2.54 0)
+					(length 5.08)
+					(name "~"
+						(effects
+							(font
+								(size 1.016 1.016)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.016 1.016)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 7.62 0 180)
+					(length 5.08)
+					(name "~"
+						(effects
+							(font
+								(size 1.016 1.016)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.016 1.016)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Regulator_Linear:AP2204K-1.5"
 			(pin_names
 				(offset 0.254)
@@ -8526,6 +8692,10 @@
 		(uuid "6d3c9c9a-bc1f-45e3-94cf-8dffd9ff06f0")
 	)
 	(no_connect
+		(at 263.017 96.139)
+		(uuid "867476d9-d159-405b-b38b-89399b26a0c7")
+	)
+	(no_connect
 		(at 77.343 179.832)
 		(uuid "8d592f18-a065-4923-8849-f5ad8685e156")
 	)
@@ -8720,6 +8890,16 @@
 			(type default)
 		)
 		(uuid "20f79143-5b3b-49fc-91d6-86d2602382ba")
+	)
+	(wire
+		(pts
+			(xy 244.729 93.599) (xy 247.777 93.599)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "21b754bf-fdd7-4713-b6ee-d5fde615a819")
 	)
 	(wire
 		(pts
@@ -9163,6 +9343,16 @@
 	)
 	(wire
 		(pts
+			(xy 263.017 91.059) (xy 269.875 91.059)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7f267a50-1f3a-4d6c-b262-6e1a118c065f")
+	)
+	(wire
+		(pts
 			(xy 78.105 93.599) (xy 88.011 93.599)
 		)
 		(stroke
@@ -9433,6 +9623,16 @@
 	)
 	(wire
 		(pts
+			(xy 244.729 87.503) (xy 244.729 93.599)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c55f3b4d-82bc-4dad-a87f-5ce064c1a41b")
+	)
+	(wire
+		(pts
 			(xy 93.218 100.584) (xy 103.759 100.584)
 		)
 		(stroke
@@ -9540,6 +9740,16 @@
 			(type default)
 		)
 		(uuid "d9cb3f5a-72f7-4eb2-b5c5-99e51c85e05c")
+	)
+	(wire
+		(pts
+			(xy 269.875 91.059) (xy 269.875 87.503)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "de7cabc3-62a7-4493-879b-b7ece74589c6")
 	)
 	(wire
 		(pts
@@ -12742,6 +12952,73 @@
 	)
 	(symbol
 		(lib_id "Switch:SW_Push")
+		(at 162.179 135.636 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "654e0185-6eda-403f-a8fa-2438cc6ebbc0")
+		(property "Reference" "SW4"
+			(at 162.179 139.636 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "OK"
+			(at 162.179 131.636 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_SMD:SW_SPST_TL3342"
+			(at 162.179 135.636 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.179 135.636 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.179 135.636 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "62120560-f45f-4c49-9bb6-3c2d18bbbd79")
+		)
+		(pin "1"
+			(uuid "b9db2415-1695-4bcb-9dab-fa745c655918")
+		)
+		(instances
+			(project "rev01"
+				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
+					(reference "SW4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
 		(at 117.221 187.198 0)
 		(unit 1)
 		(exclude_from_sim no)
@@ -12826,7 +13103,7 @@
 				(hide yes)
 			)
 		)
-		(property "Value" "VBAT"
+		(property "Value" "VBAT_SWITCHED"
 			(at 222.25 18.669 0)
 			(effects
 				(font
@@ -12868,6 +13145,72 @@
 			(project "rev01"
 				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
 					(reference "#PWR06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:VBUS")
+		(at 269.875 87.503 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "6aaf992e-4a2b-48ca-babd-a4d8f910c685")
+		(property "Reference" "#PWR018"
+			(at 269.875 91.313 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "VBAT_SWITCHED"
+			(at 269.875 82.423 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 269.875 87.503 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 269.875 87.503 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"VBUS\""
+			(at 269.875 87.503 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "42a47ea6-4df5-41eb-ba70-8eaa1bf77d24")
+		)
+		(instances
+			(project "rev01"
+				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
+					(reference "#PWR018")
 					(unit 1)
 				)
 			)
@@ -14285,6 +14628,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:VBUS")
+		(at 244.729 87.503 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "bc838c31-c6f3-4011-a8c1-0ae914d8a5e3")
+		(property "Reference" "#PWR019"
+			(at 244.729 91.313 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "VBAT"
+			(at 244.729 82.423 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 244.729 87.503 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 244.729 87.503 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"VBUS\""
+			(at 244.729 87.503 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "9c67ca28-d665-470d-bcec-85926e29cabd")
+		)
+		(instances
+			(project "rev01"
+				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
+					(reference "#PWR019")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:R")
 		(at 97.028 149.479 0)
 		(unit 1)
@@ -14413,6 +14822,88 @@
 			(project "rev01"
 				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
 					(reference "R12")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "PAKT_SW_JS102011SAQN_Sym:JS102011SAQN")
+		(at 255.397 93.599 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "bf851755-016e-4aa8-9a00-7012f06b9f1e")
+		(property "Reference" "S1"
+			(at 255.397 85.09 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "JS102011SAQN"
+			(at 255.397 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "PAKT_Local_Fp:SW_JS102011SAQN"
+			(at 255.397 93.599 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 255.397 93.599 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 255.397 93.599 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "MANUFACTURER" "C&K"
+			(at 255.397 93.599 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "72405149-a748-4525-b3cf-8e86dca53151")
+		)
+		(pin "2"
+			(uuid "2c669b74-2543-48db-b476-1df2d5504214")
+		)
+		(pin "1"
+			(uuid "bdf99629-7fc3-4893-b255-26a51070e756")
+		)
+		(instances
+			(project ""
+				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
+					(reference "S1")
 					(unit 1)
 				)
 			)
@@ -14968,6 +15459,73 @@
 			(project "rev01"
 				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
 					(reference "R5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 162.179 146.939 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "db21359a-022d-4241-b7e3-4ef29e41373d")
+		(property "Reference" "SW5"
+			(at 162.179 150.939 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Left"
+			(at 162.179 142.939 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_SMD:SW_SPST_TL3342"
+			(at 162.179 146.939 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.179 146.939 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.179 146.939 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "96c453b0-21b7-4d04-b069-ab166d28c91f")
+		)
+		(pin "1"
+			(uuid "b0486d45-8576-4016-9255-36fc1c9b28d1")
+		)
+		(instances
+			(project "rev01"
+				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
+					(reference "SW5")
 					(unit 1)
 				)
 			)
@@ -16122,6 +16680,73 @@
 			(project "rev01"
 				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
 					(reference "U4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 162.179 125.476 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ff609acb-c676-45f7-92a8-834e8c959b8d")
+		(property "Reference" "SW3"
+			(at 162.179 129.476 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "RIGHT"
+			(at 162.179 121.476 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_SMD:SW_SPST_TL3342"
+			(at 162.179 125.476 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 162.179 125.476 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 162.179 125.476 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f8a67200-99a9-41cb-a4be-fd8dfa2eb51d")
+		)
+		(pin "2"
+			(uuid "1637e859-b089-4a34-9355-a7927a7cb46c")
+		)
+		(instances
+			(project "rev01"
+				(path "/64745c3b-9140-45fa-99ac-121bd9bc3965/8b65be9b-9983-4e35-9af2-8bb4e0b589e3"
+					(reference "SW3")
 					(unit 1)
 				)
 			)
