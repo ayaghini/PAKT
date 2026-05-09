@@ -46,6 +46,7 @@
 "J2","CONSMA006.062","PAKT_Local_Fp:SMA_Amphenol_132134-14_Vertical_P5","CONSMA006.062:CONSMA006.062","no","TBD","TBD","Review/Select"
 "J4","USB_C_Receptacle_USB2.0_16P","Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal","Connector:USB_C_Receptacle_USB2.0_16P","no","USB4105-GF-A","GCT","USB-C receptacle USB2.0"
 "J5","GPS_ANT","Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical","Connector:Conn_Coaxial","no","U.FL-R-SMT-1(80)","Hirose","GPS RF connector"
+"J6","EPAPER_HAT_40PIN","Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical","Connector_Generic:Conn_02x20_Odd_Even","no","PPTC202LFBN-RC","Sullins","2x20 2.54mm female header for Waveshare HAT+; buy: https://www.digikey.com/en/products/detail/sullins-connector-solutions/PPTC202LFBN-RC/810164"
 "L3","CI160808-33NJ","Inductor_SMD:L_0603_1608Metric","CI160808-33NJ:CI160808-33NJ","no","CI160808-33NJ","Samsung Electro-Mechanics","33nH RF inductor"
 "Q4","DMG3415U","PAKT_Local_Fp:SOT-23_GSD","Device:Q_PMOS","no","DMG3415U-7","Diodes Inc.","P-MOS power path"
 "R10","10k_ALRT_PU","Resistor_SMD:R_0603_1608Metric","Device:R","no","RC0603FR-0710KL","Yageo","1% 0603"

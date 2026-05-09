@@ -55,6 +55,7 @@
 "1","EEEFK1A151P","Capacitor_Tantalum_SMD:CP_EIA-7343-31_Kemet-D","EEEFK1A151P","Panasonic","no","C33","150uF polymer"
 "1","ESP32-S3-WROOM-1","PAKT_RF_Module_Fp:ESP32-S3-WROOM-1","ESP32-S3-WROOM-1","Espressif","no","U2","Select flash/PSRAM variant at ordering time"
 "1","GPS_ANT","Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical","U.FL-R-SMT-1(80)","Hirose","no","J5","GPS RF connector"
+"1","EPAPER_HAT_40PIN","Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical","PPTC202LFBN-RC","Sullins","no","J6","2x20 2.54mm female header for Waveshare HAT+; buy: https://www.digikey.com/en/products/detail/sullins-connector-solutions/PPTC202LFBN-RC/810164"
 "1","LED","LED_SMD:LED_0603_1608Metric","LTST-C190KRKT","Lite-On","no","D4","Red 0603 LED"
 "1","LED_CHG","LED_SMD:LED_0603_1608Metric","LTST-C190KGKT","Lite-On","no","D1","Green 0603 LED"
 "1","MAX17048G+T10","PAKT_MAX17048_Fp:DFN-8-1EP_3x2mm_P0.5mm_EP1.7x1.4mm","MAX17048G+T10","Analog Devices / Maxim","no","U4","Fuel gauge"

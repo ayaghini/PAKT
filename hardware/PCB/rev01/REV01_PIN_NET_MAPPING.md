@@ -165,3 +165,51 @@ Use this map to replace remaining KiCad auto-nets (`Net-(...)`) with explicit na
 | `Net-(U6-VBAT)` | `MCP73831_VBAT` |
 | `Net-(U7-EN)` | `REG_EN` |
 | `Net-(U9-OUT)` | `SA818_RF_OUT` |
+## 9) Waveshare 3.97in e-Paper HAT+ (40-pin) Integration
+
+Source: Waveshare 3.97in e-Paper HAT+ manual and schematic.
+
+### Recommended ESP32 net assignment (conflict-free with current Rev01)
+
+| e-Paper signal | HAT 40-pin physical pin | ESP32-S3 GPIO | New net name |
+|---|---:|---:|---|
+| `DIN` | 19 | IO21 | `EPD_DIN` |
+| `SCLK` | 23 | IO16 | `EPD_SCLK` |
+| `CS` | 24 | IO5 | `EPD_CS` |
+| `DC` | 22 | IO6 | `EPD_DC` |
+| `RST` | 11 | IO7 | `EPD_RST` |
+| `BUSY` | 18 | IO38 | `EPD_BUSY` |
+| `PWR` | 12 | IO39 | `EPD_PWR_EN` |
+| `3V3` | 1 and/or 17 | 3V3 rail | `+3.3V` |
+| `5V` (optional) | 2 and/or 4 | 5V rail | `+5V` |
+| `GND` | 6/9/14/20/25/30/34/39 | GND | `GND` |
+
+Notes:
+- Above keeps your existing UART/I2C/I2S/SA818 assignments untouched.
+- Display board supports 3.3V or 5V supply input; for ESP32-native IO use 3.3V domain.
+- Waveshare reference ESP32 mapping is `DIN=IO14`, `CLK=IO13`, `CS=IO15`, `DC=IO27`, `RST=IO26`, `BUSY=IO25`, `PWR=IO33`; reassignment above is intentional to avoid Rev01 pin conflicts.
+- `IO14` is already used by `I2S_MCLK` in Rev01 and should not be reused for e-paper.
+- For ESP32-S3-WROOM-1 variants with embedded Octal PSRAM (R8 variants), `IO35/IO36/IO37` are not available for user GPIO; mapping above avoids those pins.
+
+### 40-pin socket to place in schematic/PCB
+
+- Symbol: `Connector_Generic:Conn_02x20_Odd_Even`
+- Footprint (THT): `Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical`
+- Footprint (stackable/holder style): `Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical_SMD` (if you need solder-side clearance) or long-tail stackable equivalent from vendor.
+
+Suggested accessible MPN options:
+- Through-hole female socket: `Sullins PPTC202LFBN-RC` (2x20, 2.54mm)
+- Stackable long-tail female header: `Adafruit 2223` equivalent style (choose vendor-specific 2x20 stackable, 2.54mm, >=8.5mm body).
+
+### Mechanical constraints from vendor docs
+
+Confirmed:
+- HAT+ board size: `99.50 mm x 60.00 mm`
+- Header pitch: `2.54 mm`, 2x20
+
+Mounting holes:
+- Waveshare public manual/schematic do not publish explicit hole XY coordinates for this specific HAT+ board.
+- Use these PCB constraints for placement unless you re-measure from the physical board or vendor CAD:
+  - Hole drill: `3.2 mm` (M3 clearance)
+  - Keepout ring: `>= 6.0 mm` OD recommended
+  - If you intend to co-mount with Raspberry Pi pattern hardware, use M2.5 hardware and verify fit against the actual HAT board before fab.
